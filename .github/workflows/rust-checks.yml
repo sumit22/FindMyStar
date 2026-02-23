@@ -5,13 +5,11 @@ on:
     branches: [main]
     paths:
       - 'core/**'
-      - 'Cargo.lock'
       - '.github/workflows/rust-checks.yml'
   pull_request:
     branches: [main]
     paths:
       - 'core/**'
-      - 'Cargo.lock'
       - '.github/workflows/rust-checks.yml'
   workflow_call:
 
@@ -73,6 +71,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: rustsec/audit-check@v2
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked || true
+      - name: Run cargo audit
+        working-directory: core
+        run: cargo audit
