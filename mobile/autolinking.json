@@ -1,0 +1,13 @@
+{
+  "reactNativeVersion": "0.78.2",
+  "dependencies": {},
+  "project": {
+    "android": {
+      "sourceDir": ".",
+      "appName": "app",
+      "packageName": "com.findmystar",
+      "applicationId": "com.findmystar",
+      "mainActivity": ".MainActivity"
+    }
+  }
+}
