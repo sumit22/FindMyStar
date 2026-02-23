@@ -1,0 +1,31 @@
+[package]
+name = "findmystar-core"
+version = "0.1.0"
+edition = "2021"
+description = "Precision offline celestial computation engine"
+license = "MIT"
+
+[lib]
+name = "findmystar_core"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+libm = "0.2"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "computation_benchmarks"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+
+[profile.bench]
+opt-level = 3
+lto = true
