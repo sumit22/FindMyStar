@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Pre-commit hook for FindMyStar mono-repo
+#
+# Checks:
+#   Rust: cargo fmt, cargo clippy
+#   TypeScript: lint-staged (ESLint + Prettier on staged files)
+#   TypeScript: tsc --noEmit
+#
+# Install: git config core.hooksPath .githooks
+#   or run: ./scripts/setup-hooks.sh
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+PASS=0
+FAIL=0
+
+pass() { echo -e "${GREEN}✓${NC} $1"; ((PASS++)); }
+fail() { echo -e "${RED}✗${NC} $1"; ((FAIL++)); }
+info() { echo -e "${YELLOW}→${NC} $1"; }
+
+# Detect which files are staged
+STAGED_RS=$(git diff --cached --name-only --diff-filter=ACM -- 'core/**/*.rs' 2>/dev/null || true)
+STAGED_TS=$(git diff --cached --name-only --diff-filter=ACM -- 'mobile/src/**/*.ts' 'mobile/src/**/*.tsx' 2>/dev/null || true)
+
+echo "Pre-commit checks..."
+
+# ─── Rust checks (only if Rust files changed) ───
+if [ -n "$STAGED_RS" ]; then
+  info "Rust files staged — running checks"
+
+  if command -v cargo &> /dev/null; then
+    # Format check
+    if cargo fmt --manifest-path core/Cargo.toml -- --check > /dev/null 2>&1; then
+      pass "cargo fmt"
+    else
+      fail "cargo fmt — run: cd core && cargo fmt"
+    fi
+
+    # Clippy
+    if cargo clippy --manifest-path core/Cargo.toml -- -D warnings > /dev/null 2>&1; then
+      pass "cargo clippy"
+    else
+      fail "cargo clippy — fix warnings before committing"
+    fi
+  else
+    info "cargo not found — skipping Rust checks"
+  fi
+else
+  info "No Rust files staged — skipping"
+fi
+
+# ─── TypeScript checks (only if TS/TSX files changed) ───
+if [ -n "$STAGED_TS" ]; then
+  info "TypeScript files staged — running checks"
+
+  if command -v npx &> /dev/null && [ -d "mobile/node_modules" ]; then
+    # lint-staged (runs ESLint + Prettier on staged files only)
+    if (cd mobile && npx lint-staged) > /dev/null 2>&1; then
+      pass "lint-staged (ESLint + Prettier)"
+    else
+      fail "lint-staged — run: cd mobile && npx eslint . --ext .ts,.tsx --fix && npm run format"
+    fi
+
+    # TypeScript type check (always checks all files, not just staged)
+    if (cd mobile && npx tsc --noEmit) > /dev/null 2>&1; then
+      pass "tsc --noEmit"
+    else
+      fail "TypeScript errors — run: cd mobile && npx tsc --noEmit"
+    fi
+  else
+    info "node_modules not found — run: cd mobile && npm install"
+  fi
+else
+  info "No TypeScript files staged — skipping"
+fi
+
+# ─── Summary ───
+echo ""
+if [ "$FAIL" -gt 0 ]; then
+  echo -e "${RED}Commit blocked: $FAIL check(s) failed${NC}"
+  echo "Fix the issues above and try again."
+  exit 1
+fi
+
+if [ "$PASS" -gt 0 ]; then
+  echo -e "${GREEN}All $PASS check(s) passed${NC}"
+fi
+
+exit 0
