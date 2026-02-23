@@ -56,6 +56,7 @@ pub extern "C" fn ffi_ra_dec_to_altaz(
 /// object_id: planet_id (1-7) or hip_id for stars
 /// Returns RA in hours via out_ra, Dec in degrees via out_dec.
 #[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn ffi_compute_position(
     object_type: i32,
     object_id: u32,
@@ -137,6 +138,7 @@ pub extern "C" fn ffi_compute_rise_set(
 
 /// Converts altitude/azimuth to a unit vector in East-Up-North frame.
 #[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub extern "C" fn ffi_altaz_to_vector3(
     alt_deg: f64,
     az_deg: f64,
@@ -190,5 +192,5 @@ pub extern "C" fn ffi_classify_twilight(sun_alt_deg: f64) -> i32 {
 /// Returns the engine version string.
 #[no_mangle]
 pub extern "C" fn ffi_core_version() -> *const u8 {
-    b"0.1.0\0".as_ptr()
+    c"0.1.0".as_ptr().cast()
 }
