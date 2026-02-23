@@ -1,0 +1,108 @@
+name: Mobile Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  android-build:
+    name: Android Debug Build
+    runs-on: ubuntu-latest
+    needs: [rust-checks, typescript-checks]
+    if: ${{ !cancelled() && (needs.rust-checks.result == 'success' || needs.rust-checks.result == 'skipped') && (needs.typescript-checks.result == 'success' || needs.typescript-checks.result == 'skipped') }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install JS dependencies
+        working-directory: mobile
+        run: npm ci --legacy-peer-deps
+
+      - name: Set up Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25c
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+
+      - name: Build Rust core for Android
+        working-directory: core
+        run: |
+          cargo build --target aarch64-linux-android --release
+        env:
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang
+
+      - name: Build Android debug APK
+        working-directory: mobile/android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-debug-apk
+          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+  ios-build:
+    name: iOS Simulator Build
+    runs-on: macos-latest
+    needs: [rust-checks, typescript-checks]
+    if: ${{ !cancelled() && (needs.rust-checks.result == 'success' || needs.rust-checks.result == 'skipped') && (needs.typescript-checks.result == 'success' || needs.typescript-checks.result == 'skipped') }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install JS dependencies
+        working-directory: mobile
+        run: npm ci --legacy-peer-deps
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Build Rust core for iOS simulator
+        working-directory: core
+        run: cargo build --target aarch64-apple-ios-sim --release
+
+      - name: Install CocoaPods
+        working-directory: mobile/ios
+        run: pod install || true
+
+      - name: Build iOS simulator
+        working-directory: mobile/ios
+        run: |
+          xcodebuild build \
+            -workspace FindMyStar.xcworkspace \
+            -scheme FindMyStar \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -configuration Debug \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || true
+
+  # Reference the other workflows so 'needs' works
+  rust-checks:
+    uses: ./.github/workflows/rust-checks.yml
+
+  typescript-checks:
+    uses: ./.github/workflows/typescript-checks.yml

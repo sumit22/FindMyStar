@@ -1,0 +1,72 @@
+name: Scheduled Jobs
+
+on:
+  schedule:
+    # Nightly validation at 03:00 UTC
+    - cron: '0 3 * * *'
+    # Weekly security audit at 06:00 UTC on Mondays
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  nightly-validation:
+    name: Nightly Validation
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 3 * * *' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            core/target/
+          key: ${{ runner.os }}-cargo-nightly-${{ hashFiles('core/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Run validation tests
+        working-directory: core
+        run: cargo test --test validation_tests -- --nocapture
+
+      - name: Run benchmark tests
+        working-directory: core
+        run: cargo test --test bench_tests -- --nocapture
+
+      - name: Run all unit tests
+        working-directory: core
+        run: cargo test --all-targets
+
+  weekly-audit:
+    name: Weekly Security Audit
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 6 * * 1' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Rust audit
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked || true
+      - name: Rust security audit
+        working-directory: core
+        run: cargo audit
+
+      # Node audit
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mobile/package-lock.json
+      - name: Install npm dependencies
+        working-directory: mobile
+        run: npm ci --legacy-peer-deps
+      - name: npm security audit
+        working-directory: mobile
+        run: npm audit --production --audit-level=high
