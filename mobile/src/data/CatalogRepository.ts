@@ -116,7 +116,9 @@ function mapTrackedRow(row: Record<string, unknown>): TrackedObject {
 }
 
 async function getDb(): Promise<SQLiteDatabase> {
-  if (db) {return db;}
+  if (db) {
+    return db;
+  }
   db = await SQLite.openDatabase({
     name: 'findmystar.db',
     location: 'default',
@@ -160,7 +162,9 @@ export async function search(queryStr: string, limit = 50): Promise<CelestialObj
 
 export async function getById(id: number): Promise<CelestialObject | null> {
   const cached = objectCache.get(id);
-  if (cached) {return cached;}
+  if (cached) {
+    return cached;
+  }
   const rows = await query('SELECT * FROM objects WHERE id = ?', [id], mapRow);
   if (rows.length > 0) {
     objectCache.set(id, rows[0]);
@@ -181,10 +185,7 @@ export async function getTrackedObjects(): Promise<TrackedObject[]> {
   return query('SELECT * FROM tracked_objects ORDER BY id ASC', [], mapTrackedRow);
 }
 
-export async function createTrackedObject(
-  objectId: number,
-  config: AlarmConfig,
-): Promise<number> {
+export async function createTrackedObject(objectId: number, config: AlarmConfig): Promise<number> {
   const id = await execute(
     `INSERT INTO tracked_objects (object_id, lat, lon, min_altitude, notify_before_minutes, is_recurring)
      VALUES (?, ?, ?, ?, ?, ?)`,
@@ -202,21 +203,51 @@ export async function createTrackedObject(
 
 export async function updateTrackedObject(
   id: number,
-  config: Partial<AlarmConfig> & { enabled?: boolean; nextRiseMs?: number | null; nextSetMs?: number | null },
+  config: Partial<AlarmConfig> & {
+    enabled?: boolean;
+    nextRiseMs?: number | null;
+    nextSetMs?: number | null;
+  },
 ): Promise<void> {
   const sets: string[] = [];
   const params: (string | number | null)[] = [];
 
-  if (config.lat !== undefined) { sets.push('lat = ?'); params.push(config.lat); }
-  if (config.lon !== undefined) { sets.push('lon = ?'); params.push(config.lon); }
-  if (config.minAltitude !== undefined) { sets.push('min_altitude = ?'); params.push(config.minAltitude); }
-  if (config.notifyBeforeMinutes !== undefined) { sets.push('notify_before_minutes = ?'); params.push(config.notifyBeforeMinutes); }
-  if (config.isRecurring !== undefined) { sets.push('is_recurring = ?'); params.push(config.isRecurring ? 1 : 0); }
-  if (config.enabled !== undefined) { sets.push('enabled = ?'); params.push(config.enabled ? 1 : 0); }
-  if (config.nextRiseMs !== undefined) { sets.push('next_rise_ms = ?'); params.push(config.nextRiseMs); }
-  if (config.nextSetMs !== undefined) { sets.push('next_set_ms = ?'); params.push(config.nextSetMs); }
+  if (config.lat !== undefined) {
+    sets.push('lat = ?');
+    params.push(config.lat);
+  }
+  if (config.lon !== undefined) {
+    sets.push('lon = ?');
+    params.push(config.lon);
+  }
+  if (config.minAltitude !== undefined) {
+    sets.push('min_altitude = ?');
+    params.push(config.minAltitude);
+  }
+  if (config.notifyBeforeMinutes !== undefined) {
+    sets.push('notify_before_minutes = ?');
+    params.push(config.notifyBeforeMinutes);
+  }
+  if (config.isRecurring !== undefined) {
+    sets.push('is_recurring = ?');
+    params.push(config.isRecurring ? 1 : 0);
+  }
+  if (config.enabled !== undefined) {
+    sets.push('enabled = ?');
+    params.push(config.enabled ? 1 : 0);
+  }
+  if (config.nextRiseMs !== undefined) {
+    sets.push('next_rise_ms = ?');
+    params.push(config.nextRiseMs);
+  }
+  if (config.nextSetMs !== undefined) {
+    sets.push('next_set_ms = ?');
+    params.push(config.nextSetMs);
+  }
 
-  if (sets.length === 0) {return;}
+  if (sets.length === 0) {
+    return;
+  }
   params.push(id);
   await execute(`UPDATE tracked_objects SET ${sets.join(', ')} WHERE id = ?`, params);
 }

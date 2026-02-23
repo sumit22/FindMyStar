@@ -53,7 +53,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
   loading: false,
   error: null,
 
-  updateAR: (ar) => set({ ar }),
+  updateAR: ar => set({ ar }),
   clearError: () => set({ error: null }),
 
   loadAlarms: async () => {
@@ -92,10 +92,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
   },
 
-  deleteAlarm: async (alarmId) => {
+  deleteAlarm: async alarmId => {
     try {
       await AlarmScheduler.deleteAlarm(alarmId);
-      set((state) => ({
+      set(state => ({
         trackedObjects: state.trackedObjects.filter(o => o.id !== alarmId),
       }));
     } catch (e) {
@@ -103,12 +103,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
   },
 
-  toggleAlarm: async (alarmId) => {
+  toggleAlarm: async alarmId => {
     const obj = get().trackedObjects.find(o => o.id === alarmId);
-    if (!obj) {return;}
+    if (!obj) {
+      return;
+    }
     try {
       await AlarmScheduler.toggleAlarm(alarmId, !obj.enabled);
-      set((state) => ({
+      set(state => ({
         trackedObjects: state.trackedObjects.map(o =>
           o.id === alarmId ? { ...o, enabled: !o.enabled } : o,
         ),
@@ -127,14 +129,14 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     }
   },
 
-  startTracking: async (obj) => {
+  startTracking: async obj => {
     set({ error: null });
     try {
       await ObjectTracker.initialize(obj);
       set({ activeTrackingId: obj.id });
 
       // Subscribe to tracking updates
-      ObjectTracker.onTrackingUpdate((frame) => {
+      ObjectTracker.onTrackingUpdate(frame => {
         set({
           ar: {
             altitude: frame.altitude,

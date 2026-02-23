@@ -1,11 +1,5 @@
 import React, { useCallback } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-} from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { usePreferencesStore } from '../store/preferencesStore';
 import type { ThemePref } from '../store/preferencesStore';
@@ -21,11 +15,7 @@ const ALTITUDE_OPTIONS = [5, 10, 15, 20, 30];
 
 function SectionHeader({ title }: { title: string }) {
   const { colors } = useTheme();
-  return (
-    <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
-      {title}
-    </Text>
-  );
+  return <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>{title}</Text>;
 }
 
 function OptionRow({
@@ -40,16 +30,16 @@ function OptionRow({
   const { colors } = useTheme();
   return (
     <TouchableOpacity
-      style={[styles.optionRow, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+      style={[
+        styles.optionRow,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+      ]}
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected }}
-      accessibilityLabel={label}
-    >
+      accessibilityLabel={label}>
       <Text style={[styles.optionLabel, { color: colors.text }]}>{label}</Text>
-      {selected && (
-        <Text style={[styles.checkmark, { color: colors.primary }]}>{'\u2713'}</Text>
-      )}
+      {selected && <Text style={[styles.checkmark, { color: colors.primary }]}>{'\u2713'}</Text>}
     </TouchableOpacity>
   );
 }
@@ -66,19 +56,16 @@ function ToggleRow({
   const { colors } = useTheme();
   return (
     <TouchableOpacity
-      style={[styles.optionRow, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+      style={[
+        styles.optionRow,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+      ]}
       onPress={onToggle}
       accessibilityRole="switch"
       accessibilityState={{ checked: value }}
-      accessibilityLabel={label}
-    >
+      accessibilityLabel={label}>
       <Text style={[styles.optionLabel, { color: colors.text }]}>{label}</Text>
-      <View
-        style={[
-          styles.toggle,
-          { backgroundColor: value ? colors.primary : colors.border },
-        ]}
-      >
+      <View style={[styles.toggle, { backgroundColor: value ? colors.primary : colors.border }]}>
         <View style={[styles.toggleThumb, value ? styles.toggleOn : styles.toggleOff]} />
       </View>
     </TouchableOpacity>
@@ -97,7 +84,9 @@ export default function SettingsScreen(): React.JSX.Element {
 
   const [coreVersion, setCoreVersion] = React.useState('...');
   React.useEffect(() => {
-    Core.coreVersion().then(setCoreVersion).catch(() => setCoreVersion('unavailable'));
+    Core.coreVersion()
+      .then(setCoreVersion)
+      .catch(() => setCoreVersion('unavailable'));
   }, []);
 
   const handleToggleNotifications = useCallback(() => {
@@ -107,8 +96,7 @@ export default function SettingsScreen(): React.JSX.Element {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-    >
+      contentContainerStyle={styles.content}>
       <SectionHeader title="APPEARANCE" />
       {THEME_OPTIONS.map(opt => (
         <OptionRow
@@ -137,18 +125,19 @@ export default function SettingsScreen(): React.JSX.Element {
       ))}
 
       <SectionHeader title="ABOUT" />
-      <View style={[styles.aboutCard, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.aboutCard,
+          { backgroundColor: colors.cardBackground, borderColor: colors.border },
+        ]}>
         <Text style={[styles.aboutTitle, { color: colors.text }]}>FindMyStar</Text>
-        <Text style={[styles.aboutVersion, { color: colors.textSecondary }]}>
-          Version 0.1.0
-        </Text>
+        <Text style={[styles.aboutVersion, { color: colors.textSecondary }]}>Version 0.1.0</Text>
         <Text style={[styles.aboutVersion, { color: colors.textSecondary }]}>
           Core engine: {coreVersion}
         </Text>
         <Text style={[styles.aboutDescription, { color: colors.textSecondary }]}>
-          Offline celestial object finder with AR guidance.
-          All computations run locally on your device.
-          No data is collected or transmitted.
+          Offline celestial object finder with AR guidance. All computations run locally on your
+          device. No data is collected or transmitted.
         </Text>
       </View>
     </ScrollView>

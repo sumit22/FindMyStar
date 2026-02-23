@@ -77,12 +77,12 @@ export async function requestPermission(): Promise<boolean> {
 export function getCurrentLocation(): Promise<Location> {
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
+      pos => {
         const loc = toLocation(pos);
         lastKnown = loc;
         resolve(loc);
       },
-      (err) => {
+      err => {
         if (lastKnown) {
           resolve(lastKnown);
         } else {
@@ -94,19 +94,18 @@ export function getCurrentLocation(): Promise<Location> {
   });
 }
 
-export function startWatching(
-  intervalMs: number,
-  callback: (loc: Location) => void,
-): void {
+export function startWatching(intervalMs: number, callback: (loc: Location) => void): void {
   stopWatching();
   onUpdate = callback;
   watchId = navigator.geolocation.watchPosition(
-    (pos) => {
+    pos => {
       const loc = toLocation(pos);
       lastKnown = loc;
       onUpdate?.(loc);
     },
-    () => { /* silently use last known */ },
+    () => {
+      /* silently use last known */
+    },
     {
       enableHighAccuracy: true,
       distanceFilter: 100, // meters
@@ -128,6 +127,8 @@ export function getLastKnown(): Location | null {
 }
 
 export function isStale(): boolean {
-  if (!lastKnown) {return true;}
+  if (!lastKnown) {
+    return true;
+  }
   return Date.now() - lastKnown.timestamp > 3600000; // 1 hour
 }

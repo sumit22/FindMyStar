@@ -27,23 +27,23 @@ async function persist(partial: Record<string, unknown>): Promise<void> {
   }
 }
 
-export const usePreferencesStore = create<PreferencesState>((set) => ({
+export const usePreferencesStore = create<PreferencesState>(set => ({
   theme: 'dark',
   notificationsEnabled: true,
   minAltitudeDefault: 10,
   loaded: false,
 
-  setTheme: (theme) => {
+  setTheme: theme => {
     set({ theme });
     persist({ theme });
   },
 
-  setNotificationsEnabled: (enabled) => {
+  setNotificationsEnabled: enabled => {
     set({ notificationsEnabled: enabled });
     persist({ notificationsEnabled: enabled });
   },
 
-  setMinAltitudeDefault: (altitude) => {
+  setMinAltitudeDefault: altitude => {
     set({ minAltitudeDefault: altitude });
     persist({ minAltitudeDefault: altitude });
   },

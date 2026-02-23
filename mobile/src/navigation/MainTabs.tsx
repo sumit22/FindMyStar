@@ -20,16 +20,8 @@ export default function MainTabs(): React.JSX.Element {
         headerStyle: { backgroundColor: colors.surface },
         headerTintColor: colors.text,
       }}>
-      <Tab.Screen
-        name="Search"
-        component={SearchScreen}
-        options={{ title: 'Search' }}
-      />
-      <Tab.Screen
-        name="Alarms"
-        component={AlarmsScreen}
-        options={{ title: 'Alarms' }}
-      />
+      <Tab.Screen name="Search" component={SearchScreen} options={{ title: 'Search' }} />
+      <Tab.Screen name="Alarms" component={AlarmsScreen} options={{ title: 'Alarms' }} />
     </Tab.Navigator>
   );
 }

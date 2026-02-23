@@ -55,7 +55,9 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   searchObjects: (query: string) => {
     set({ searchQuery: query });
 
-    if (searchDebounceTimer) {clearTimeout(searchDebounceTimer);}
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+    }
 
     if (query.length === 0) {
       set({ searchResults: [] });
@@ -67,9 +69,7 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
       try {
         const results = await CatalogRepo.search(query, 50);
         const filterType = get().filterType;
-        const filtered = filterType
-          ? results.filter(o => o.type === filterType)
-          : results;
+        const filtered = filterType ? results.filter(o => o.type === filterType) : results;
         set({ searchResults: filtered, loading: false });
       } catch (e) {
         set({ loading: false, error: e instanceof Error ? e.message : 'Search failed' });
@@ -86,6 +86,8 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
 export function useFilteredObjects(): CelestialObject[] {
   const objects = useCatalogStore(s => s.objects);
   const filterType = useCatalogStore(s => s.filterType);
-  if (!filterType) {return objects;}
+  if (!filterType) {
+    return objects;
+  }
   return objects.filter(o => o.type === filterType);
 }

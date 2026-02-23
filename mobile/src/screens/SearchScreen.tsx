@@ -33,15 +33,9 @@ function VisibilityBadge({ magnitude }: { magnitude: number }) {
   const visible = magnitude <= 6.0;
   return (
     <View
-      style={[
-        styles.badge,
-        { backgroundColor: visible ? colors.success : colors.textSecondary },
-      ]}
-      accessibilityLabel={visible ? 'Visible to naked eye' : 'Requires telescope'}
-    >
-      <Text style={styles.badgeText}>
-        {visible ? 'Naked eye' : `Mag ${magnitude.toFixed(1)}`}
-      </Text>
+      style={[styles.badge, { backgroundColor: visible ? colors.success : colors.textSecondary }]}
+      accessibilityLabel={visible ? 'Visible to naked eye' : 'Requires telescope'}>
+      <Text style={styles.badgeText}>{visible ? 'Naked eye' : `Mag ${magnitude.toFixed(1)}`}</Text>
     </View>
   );
 }
@@ -51,12 +45,14 @@ function ResultItem({ item, onPress }: { item: CelestialObject; onPress: () => v
   const icon = TYPE_ICONS[item.type] ?? '\u2022';
   return (
     <TouchableOpacity
-      style={[styles.resultItem, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
+      style={[
+        styles.resultItem,
+        { backgroundColor: colors.cardBackground, borderColor: colors.border },
+      ]}
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${item.commonName ?? item.name}, ${item.type}, magnitude ${item.magnitude.toFixed(1)}`}
-      activeOpacity={0.7}
-    >
+      activeOpacity={0.7}>
       <View style={styles.resultIcon}>
         <Text style={[styles.iconText, { color: colors.accent }]}>{icon}</Text>
       </View>
@@ -113,7 +109,8 @@ export default function SearchScreen(): React.JSX.Element {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View
+        style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.searchIcon, { color: colors.textSecondary }]}>{'\u{1F50D}'}</Text>
         <TextInput
           ref={inputRef}
@@ -181,7 +178,12 @@ const styles = StyleSheet.create({
   },
   searchIcon: { fontSize: 18, marginRight: 8 },
   input: { flex: 1, fontSize: 16, paddingVertical: 8 },
-  stateContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  stateContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
   emptyIcon: { fontSize: 48, marginBottom: 16 },
   emptyText: { fontSize: 16, textAlign: 'center' },
   emptyHint: { fontSize: 14, textAlign: 'center', marginTop: 8 },

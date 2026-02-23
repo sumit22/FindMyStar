@@ -18,7 +18,9 @@ import type { RootStackParamList } from '../navigation/types';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 function formatTime(ms: number | null): string {
-  if (ms === null) {return 'Calculating...';}
+  if (ms === null) {
+    return 'Calculating...';
+  }
   const d = new Date(ms);
   const now = new Date();
   const isToday = d.toDateString() === now.toDateString();
@@ -27,8 +29,12 @@ function formatTime(ms: number | null): string {
   const isTomorrow = d.toDateString() === tomorrow.toDateString();
 
   const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (isToday) {return `Today ${timeStr}`;}
-  if (isTomorrow) {return `Tomorrow ${timeStr}`;}
+  if (isToday) {
+    return `Today ${timeStr}`;
+  }
+  if (isTomorrow) {
+    return `Tomorrow ${timeStr}`;
+  }
   return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${timeStr}`;
 }
 
@@ -55,16 +61,11 @@ function AlarmItem({
       onPress={onPress}
       onLongPress={onDelete}
       accessibilityRole="button"
-      accessibilityLabel={`${alarm.objectName}, next rise ${formatTime(alarm.nextRiseMs)}`}
-    >
+      accessibilityLabel={`${alarm.objectName}, next rise ${formatTime(alarm.nextRiseMs)}`}>
       <View style={styles.alarmContent}>
         <Text
-          style={[
-            styles.alarmName,
-            { color: alarm.enabled ? colors.text : colors.textSecondary },
-          ]}
-          numberOfLines={1}
-        >
+          style={[styles.alarmName, { color: alarm.enabled ? colors.text : colors.textSecondary }]}
+          numberOfLines={1}>
           {alarm.objectName}
         </Text>
         <Text style={[styles.alarmTime, { color: colors.textSecondary }]}>
@@ -73,7 +74,8 @@ function AlarmItem({
             : 'Calculating next visibility...'}
         </Text>
         <Text style={[styles.alarmMeta, { color: colors.textSecondary }]}>
-          Min alt: {alarm.minAltitude}{'\u00B0'} {'\u2022'} {alarm.notifyBeforeMinutes}min before
+          Min alt: {alarm.minAltitude}
+          {'\u00B0'} {'\u2022'} {alarm.notifyBeforeMinutes}min before
           {alarm.isRecurring ? ' \u2022 Recurring' : ''}
         </Text>
       </View>
@@ -85,14 +87,8 @@ function AlarmItem({
         onPress={onToggle}
         accessibilityRole="switch"
         accessibilityLabel={alarm.enabled ? 'Disable alarm' : 'Enable alarm'}
-        accessibilityState={{ checked: alarm.enabled }}
-      >
-        <View
-          style={[
-            styles.toggleThumb,
-            alarm.enabled ? styles.toggleOn : styles.toggleOff,
-          ]}
-        />
+        accessibilityState={{ checked: alarm.enabled }}>
+        <View style={[styles.toggleThumb, alarm.enabled ? styles.toggleOn : styles.toggleOff]} />
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -122,18 +118,14 @@ export default function AlarmsScreen(): React.JSX.Element {
 
   const handleDelete = useCallback(
     (alarm: TrackedObjectInfo) => {
-      Alert.alert(
-        'Delete Alarm',
-        `Remove the alarm for ${alarm.objectName}?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => deleteAlarm(alarm.id),
-          },
-        ],
-      );
+      Alert.alert('Delete Alarm', `Remove the alarm for ${alarm.objectName}?`, [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => deleteAlarm(alarm.id),
+        },
+      ]);
     },
     [deleteAlarm],
   );
@@ -164,8 +156,7 @@ export default function AlarmsScreen(): React.JSX.Element {
           style={[styles.searchButton, { backgroundColor: colors.primary }]}
           onPress={() => navigation.navigate('MainTabs')}
           accessibilityRole="button"
-          accessibilityLabel="Go to search"
-        >
+          accessibilityLabel="Go to search">
           <Text style={[styles.searchButtonText, { color: colors.textInverse }]}>
             Search Objects
           </Text>

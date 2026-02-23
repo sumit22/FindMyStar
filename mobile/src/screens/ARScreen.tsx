@@ -1,12 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Animated,
-  Dimensions,
-} from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated, Dimensions } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import { useTheme } from '../theme/ThemeContext';
@@ -20,16 +13,25 @@ type Route = RouteProp<RootStackParamList, 'AR'>;
 const SCREEN_H = Dimensions.get('window').height;
 const ARROW_SIZE = 64;
 
-function getArrowColor(
-  distance: number,
-  colors: AppColors,
-): string {
-  if (distance < 1) {return colors.arLocked;}
-  if (distance < 5) {return colors.warning;}
+function getArrowColor(distance: number, colors: AppColors): string {
+  if (distance < 1) {
+    return colors.arLocked;
+  }
+  if (distance < 5) {
+    return colors.warning;
+  }
   return colors.error;
 }
 
-function ArrowIndicator({ angle, distance, locked }: { angle: number; distance: number; locked: boolean }) {
+function ArrowIndicator({
+  angle,
+  distance,
+  locked,
+}: {
+  angle: number;
+  distance: number;
+  locked: boolean;
+}) {
   const { colors } = useTheme();
   const rotateAnim = useRef(new Animated.Value(angle)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -67,14 +69,10 @@ function ArrowIndicator({ angle, distance, locked }: { angle: number; distance: 
       style={[
         styles.arrowContainer,
         {
-          transform: [
-            { rotate: interpolatedRotation },
-            { scale: scaleAnim },
-          ],
+          transform: [{ rotate: interpolatedRotation }, { scale: scaleAnim }],
         },
       ]}
-      accessibilityLabel={`Arrow pointing toward target, ${distance.toFixed(1)} degrees away`}
-    >
+      accessibilityLabel={`Arrow pointing toward target, ${distance.toFixed(1)} degrees away`}>
       <View style={[styles.arrowHead, { borderBottomColor: color }]} />
       <View style={[styles.arrowShaft, { backgroundColor: color }]} />
     </Animated.View>
@@ -97,8 +95,7 @@ function LockBanner() {
     <Animated.View
       style={[styles.lockBanner, { backgroundColor: colors.arLocked, opacity: fadeAnim }]}
       accessibilityRole="alert"
-      accessibilityLabel="Target locked"
-    >
+      accessibilityLabel="Target locked">
       <Text style={styles.lockText}>TARGET LOCKED</Text>
     </Animated.View>
   );
@@ -121,7 +118,9 @@ export default function ARScreen(): React.JSX.Element {
     let cancelled = false;
     async function init() {
       const obj = await getObjectById(objectId);
-      if (cancelled || !obj) {return;}
+      if (cancelled || !obj) {
+        return;
+      }
       setObjectName(obj.commonName ?? obj.name);
       await startTracking(obj);
     }
@@ -137,9 +136,7 @@ export default function ARScreen(): React.JSX.Element {
     navigation.goBack();
   }, [navigation, stopTracking]);
 
-  const arrowAngle = ar
-    ? Math.atan2(ar.azimuth, ar.altitude) * (180 / Math.PI)
-    : 0;
+  const arrowAngle = ar ? Math.atan2(ar.azimuth, ar.altitude) * (180 / Math.PI) : 0;
 
   return (
     <View style={styles.container}>
@@ -156,14 +153,11 @@ export default function ARScreen(): React.JSX.Element {
 
         {ar && (
           <View style={styles.arCenter}>
-            <ArrowIndicator
-              angle={arrowAngle}
-              distance={ar.angularDistance}
-              locked={ar.isLocked}
-            />
+            <ArrowIndicator angle={arrowAngle} distance={ar.angularDistance} locked={ar.isLocked} />
             <View style={styles.distanceBadge}>
               <Text style={styles.distanceText}>
-                {ar.angularDistance.toFixed(1)}{'\u00B0'}
+                {ar.angularDistance.toFixed(1)}
+                {'\u00B0'}
               </Text>
             </View>
           </View>
@@ -174,7 +168,9 @@ export default function ARScreen(): React.JSX.Element {
         {ar && (
           <View style={styles.infoBar}>
             <Text style={styles.infoText}>
-              Alt: {ar.altitude.toFixed(1)}{'\u00B0'}  Az: {ar.azimuth.toFixed(1)}{'\u00B0'}
+              Alt: {ar.altitude.toFixed(1)}
+              {'\u00B0'} Az: {ar.azimuth.toFixed(1)}
+              {'\u00B0'}
             </Text>
           </View>
         )}
@@ -183,8 +179,7 @@ export default function ARScreen(): React.JSX.Element {
           style={styles.backButton}
           onPress={handleBack}
           accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
+          accessibilityLabel="Go back">
           <Text style={styles.backButtonText}>{'\u2190'} Back</Text>
         </TouchableOpacity>
       </View>

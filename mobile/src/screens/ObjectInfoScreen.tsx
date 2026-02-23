@@ -23,7 +23,9 @@ type Route = RouteProp<RootStackParamList, 'ObjectInfo'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 function formatTime(ms: number | null): string {
-  if (ms === null) {return '--:--';}
+  if (ms === null) {
+    return '--:--';
+  }
   const d = new Date(ms);
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
@@ -51,7 +53,10 @@ export default function ObjectInfoScreen(): React.JSX.Element {
 
     async function load() {
       const object = await getObjectById(objectId);
-      if (cancelled || !object) { setLoading(false); return; }
+      if (cancelled || !object) {
+        setLoading(false);
+        return;
+      }
       setObj(object);
 
       try {
@@ -67,16 +72,22 @@ export default function ObjectInfoScreen(): React.JSX.Element {
       } catch {
         // Position data unavailable
       }
-      if (!cancelled) {setLoading(false);}
+      if (!cancelled) {
+        setLoading(false);
+      }
     }
 
     load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [objectId, getObjectById]);
 
   // Refresh alt/az every second
   useEffect(() => {
-    if (!obj) {return;}
+    if (!obj) {
+      return;
+    }
     const interval = setInterval(async () => {
       try {
         const loc = LocationService.getLastKnown();
@@ -84,17 +95,23 @@ export default function ObjectInfoScreen(): React.JSX.Element {
           const aa = await VisibilityService.getCurrentAltAz(obj, loc.lat, loc.lon);
           setAltAz(aa);
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }, 1000);
     return () => clearInterval(interval);
   }, [obj]);
 
   const handleTrack = useCallback(() => {
-    if (obj) {navigation.navigate('AR', { objectId: obj.id });}
+    if (obj) {
+      navigation.navigate('AR', { objectId: obj.id });
+    }
   }, [navigation, obj]);
 
   const handleSetAlarm = useCallback(async () => {
-    if (obj) {await createAlarm(obj.id);}
+    if (obj) {
+      await createAlarm(obj.id);
+    }
   }, [createAlarm, obj]);
 
   if (loading) {
@@ -118,20 +135,14 @@ export default function ObjectInfoScreen(): React.JSX.Element {
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
-      contentContainerStyle={styles.content}
-    >
+      contentContainerStyle={styles.content}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.surface }]}>
-        <Text
-          style={[styles.objectName, { color: colors.text }]}
-          accessibilityRole="header"
-        >
+        <Text style={[styles.objectName, { color: colors.text }]} accessibilityRole="header">
           {obj.commonName ?? obj.name}
         </Text>
         {obj.commonName && (
-          <Text style={[styles.catalogName, { color: colors.textSecondary }]}>
-            {obj.name}
-          </Text>
+          <Text style={[styles.catalogName, { color: colors.textSecondary }]}>{obj.name}</Text>
         )}
         <View style={styles.headerRow}>
           <Text style={[styles.objectType, { color: colors.accent }]}>
@@ -145,9 +156,11 @@ export default function ObjectInfoScreen(): React.JSX.Element {
 
       {/* Position Card */}
       <View
-        style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}
-        accessibilityLabel={`Current position: altitude ${altAz ? formatDegrees(altAz.altitude) : 'unknown'}, azimuth ${altAz ? formatDegrees(altAz.azimuth) : 'unknown'}, ${isAboveHorizon ? 'above horizon' : 'below horizon'}`}
-      >
+        style={[
+          styles.card,
+          { backgroundColor: colors.cardBackground, borderColor: colors.border },
+        ]}
+        accessibilityLabel={`Current position: altitude ${altAz ? formatDegrees(altAz.altitude) : 'unknown'}, azimuth ${altAz ? formatDegrees(altAz.azimuth) : 'unknown'}, ${isAboveHorizon ? 'above horizon' : 'below horizon'}`}>
         <Text style={[styles.cardTitle, { color: colors.text }]}>Current Position</Text>
         <View style={styles.positionRow}>
           <View style={styles.positionCol}>
@@ -168,8 +181,7 @@ export default function ObjectInfoScreen(): React.JSX.Element {
               style={[
                 styles.positionValue,
                 { color: isAboveHorizon ? colors.success : colors.error },
-              ]}
-            >
+              ]}>
               {isAboveHorizon ? 'Above horizon' : 'Below horizon'}
             </Text>
           </View>
@@ -177,7 +189,11 @@ export default function ObjectInfoScreen(): React.JSX.Element {
       </View>
 
       {/* Rise/Set Card */}
-      <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+      <View
+        style={[
+          styles.card,
+          { backgroundColor: colors.cardBackground, borderColor: colors.border },
+        ]}>
         <Text style={[styles.cardTitle, { color: colors.text }]}>Rise & Set</Text>
         {riseSet?.isCircumpolar && (
           <Text style={[styles.specialStatus, { color: colors.success }]}>
@@ -213,23 +229,25 @@ export default function ObjectInfoScreen(): React.JSX.Element {
           style={[styles.primaryButton, { backgroundColor: colors.primary }]}
           onPress={handleTrack}
           accessibilityRole="button"
-          accessibilityLabel="Track this object in AR view"
-        >
+          accessibilityLabel="Track this object in AR view">
           <Text style={[styles.buttonText, { color: colors.textInverse }]}>Track</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.secondaryButton, { borderColor: colors.primary }]}
           onPress={handleSetAlarm}
           accessibilityRole="button"
-          accessibilityLabel="Set visibility alert for this object"
-        >
+          accessibilityLabel="Set visibility alert for this object">
           <Text style={[styles.buttonText, { color: colors.primary }]}>Set Alert</Text>
         </TouchableOpacity>
       </View>
 
       {/* Description */}
       {obj.description && (
-        <View style={[styles.card, { backgroundColor: colors.cardBackground, borderColor: colors.border }]}>
+        <View
+          style={[
+            styles.card,
+            { backgroundColor: colors.cardBackground, borderColor: colors.border },
+          ]}>
           <Text style={[styles.cardTitle, { color: colors.text }]}>About</Text>
           <Text style={[styles.description, { color: colors.textSecondary }]}>
             {obj.description}

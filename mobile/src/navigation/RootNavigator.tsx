@@ -10,20 +10,14 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator(): React.JSX.Element {
   return (
-    <Stack.Navigator
-      initialRouteName="MainTabs"
-      screenOptions={{ headerShown: false }}>
+    <Stack.Navigator initialRouteName="MainTabs" screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={MainTabs} />
       <Stack.Screen
         name="ObjectInfo"
         component={ObjectInfoScreen}
         options={{ headerShown: true, title: 'Object Details' }}
       />
-      <Stack.Screen
-        name="AR"
-        component={ARScreen}
-        options={{ headerShown: false }}
-      />
+      <Stack.Screen name="AR" component={ARScreen} options={{ headerShown: false }} />
       <Stack.Screen
         name="Settings"
         component={SettingsScreen}

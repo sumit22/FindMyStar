@@ -3,7 +3,9 @@ declare module 'react-native-sqlite-storage' {
     executeSql(
       sql: string,
       params?: (string | number | null)[],
-    ): Promise<[{ rows: { length: number; item(i: number): Record<string, unknown> }; insertId?: number }]>;
+    ): Promise<
+      [{ rows: { length: number; item(i: number): Record<string, unknown> }; insertId?: number }]
+    >;
     close(): Promise<void>;
   }
 

@@ -6,12 +6,41 @@ import { NativeModules } from 'react-native';
  */
 
 interface NativeCoreModule {
-  computePosition(objectType: number, objectId: number, jd: number): Promise<{ ra: number; dec: number }>;
-  raDecToAltAz(ra: number, dec: number, lat: number, lon: number, unixMs: number): Promise<{ altitude: number; azimuth: number }>;
-  computeTracking(objectType: number, objectId: number, lat: number, lon: number, unixMs: number): Promise<{ altitude: number; azimuth: number; dirX: number; dirY: number; dirZ: number }>;
-  computeRiseSet(objectType: number, objectId: number, lat: number, lon: number, startUnixMs: number): Promise<{ status: number; riseMs: number; setMs: number }>;
+  computePosition(
+    objectType: number,
+    objectId: number,
+    jd: number,
+  ): Promise<{ ra: number; dec: number }>;
+  raDecToAltAz(
+    ra: number,
+    dec: number,
+    lat: number,
+    lon: number,
+    unixMs: number,
+  ): Promise<{ altitude: number; azimuth: number }>;
+  computeTracking(
+    objectType: number,
+    objectId: number,
+    lat: number,
+    lon: number,
+    unixMs: number,
+  ): Promise<{ altitude: number; azimuth: number; dirX: number; dirY: number; dirZ: number }>;
+  computeRiseSet(
+    objectType: number,
+    objectId: number,
+    lat: number,
+    lon: number,
+    startUnixMs: number,
+  ): Promise<{ status: number; riseMs: number; setMs: number }>;
   altAzToVector3(altitude: number, azimuth: number): Promise<{ x: number; y: number; z: number }>;
-  angularDistance(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number): Promise<number>;
+  angularDistance(
+    x1: number,
+    y1: number,
+    z1: number,
+    x2: number,
+    y2: number,
+    z2: number,
+  ): Promise<number>;
   classifyTwilight(sunAltitude: number): Promise<number>;
   coreVersion(): Promise<string>;
 }

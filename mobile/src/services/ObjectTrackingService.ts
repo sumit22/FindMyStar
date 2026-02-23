@@ -12,17 +12,17 @@ import * as LocationService from './LocationService';
 import { CelestialObject } from '../data/CatalogRepository';
 
 export interface TrackingFrame {
-  altitude: number;       // Target altitude (degrees)
-  azimuth: number;        // Target azimuth (degrees)
+  altitude: number; // Target altitude (degrees)
+  azimuth: number; // Target azimuth (degrees)
   direction: Core.Vector3; // Direction vector toward target
   angularDistance: number; // Degrees from device pointing to target
-  isLocked: boolean;      // True if locked on target
+  isLocked: boolean; // True if locked on target
 }
 
 type TrackingCallback = (frame: TrackingFrame) => void;
 
-const LOCK_THRESHOLD = 0.5;    // degrees to enter lock
-const UNLOCK_THRESHOLD = 1.0;  // degrees to exit lock (hysteresis)
+const LOCK_THRESHOLD = 0.5; // degrees to enter lock
+const UNLOCK_THRESHOLD = 1.0; // degrees to exit lock (hysteresis)
 const LOCK_DURATION_MS = 2000; // sustained time to confirm lock
 
 let active = false;
@@ -39,10 +39,18 @@ let isLocked = false;
 let belowThresholdSince = 0;
 
 function resolveObjectParams(obj: CelestialObject): { objectType: number; objectId: number } {
-  if (obj.type === 'sun') {return { objectType: Core.ObjectType.Sun, objectId: 0 };}
-  if (obj.type === 'moon') {return { objectType: Core.ObjectType.Moon, objectId: 0 };}
-  if (obj.planetId != null) {return { objectType: Core.ObjectType.Planet, objectId: obj.planetId };}
-  if (obj.hipId != null) {return { objectType: Core.ObjectType.Star, objectId: obj.hipId };}
+  if (obj.type === 'sun') {
+    return { objectType: Core.ObjectType.Sun, objectId: 0 };
+  }
+  if (obj.type === 'moon') {
+    return { objectType: Core.ObjectType.Moon, objectId: 0 };
+  }
+  if (obj.planetId != null) {
+    return { objectType: Core.ObjectType.Planet, objectId: obj.planetId };
+  }
+  if (obj.hipId != null) {
+    return { objectType: Core.ObjectType.Star, objectId: obj.hipId };
+  }
   return { objectType: Core.ObjectType.Star, objectId: 0 };
 }
 
@@ -79,7 +87,9 @@ function updateLockState(angularDist: number, now: number): boolean {
 }
 
 async function trackingLoop(): Promise<void> {
-  if (!active || !targetParams) {return;}
+  if (!active || !targetParams) {
+    return;
+  }
 
   const now = Date.now();
 
@@ -114,13 +124,17 @@ async function trackingLoop(): Promise<void> {
       isLocked: locked,
     };
 
-    for (const cb of listeners) {cb(frame);}
+    for (const cb of listeners) {
+      cb(frame);
+    }
   } catch {
     // Skip frame on error, retry next frame
   }
 
   if (active) {
-    trackingFrameId = requestAnimationFrame(() => { trackingLoop(); });
+    trackingFrameId = requestAnimationFrame(() => {
+      trackingLoop();
+    });
   }
 }
 
@@ -147,7 +161,9 @@ export async function initialize(obj: CelestialObject): Promise<void> {
   belowThresholdSince = 0;
 
   active = true;
-  trackingFrameId = requestAnimationFrame(() => { trackingLoop(); });
+  trackingFrameId = requestAnimationFrame(() => {
+    trackingLoop();
+  });
 }
 
 /**

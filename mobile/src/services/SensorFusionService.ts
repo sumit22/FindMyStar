@@ -41,7 +41,9 @@ let latestMag: SensorData | null = null;
 
 function normalize(q: Quaternion): Quaternion {
   const mag = Math.sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
-  if (mag < 1e-10) {return { w: 1, x: 0, y: 0, z: 0 };}
+  if (mag < 1e-10) {
+    return { w: 1, x: 0, y: 0, z: 0 };
+  }
   return { w: q.w / mag, x: q.x / mag, y: q.y / mag, z: q.z / mag };
 }
 
@@ -93,22 +95,34 @@ function gyroIntegrate(q: Quaternion, gyro: SensorData, dt: number): Quaternion 
 
 function accelMagToQuat(accel: SensorData, mag: SensorData): Quaternion {
   // Simplified tilt-compensated compass orientation
-  const ax = accel.x, ay = accel.y, az = accel.z;
+  const ax = accel.x,
+    ay = accel.y,
+    az = accel.z;
   const norm = Math.sqrt(ax * ax + ay * ay + az * az);
-  if (norm < 1e-6) {return currentOrientation;}
+  if (norm < 1e-6) {
+    return currentOrientation;
+  }
 
   const pitch = Math.atan2(-ax, Math.sqrt(ay * ay + az * az));
   const roll = Math.atan2(ay, az);
 
-  const mx = mag.x, my = mag.y, mz = mag.z;
+  const mx = mag.x,
+    my = mag.y,
+    mz = mag.z;
   const xh = mx * Math.cos(pitch) + mz * Math.sin(pitch);
-  const yh = mx * Math.sin(roll) * Math.sin(pitch) + my * Math.cos(roll) - mz * Math.sin(roll) * Math.cos(pitch);
+  const yh =
+    mx * Math.sin(roll) * Math.sin(pitch) +
+    my * Math.cos(roll) -
+    mz * Math.sin(roll) * Math.cos(pitch);
   const yaw = Math.atan2(-yh, xh);
 
   // Euler to quaternion (ZYX convention)
-  const cy = Math.cos(yaw * 0.5), sy = Math.sin(yaw * 0.5);
-  const cp = Math.cos(pitch * 0.5), sp = Math.sin(pitch * 0.5);
-  const cr = Math.cos(roll * 0.5), sr = Math.sin(roll * 0.5);
+  const cy = Math.cos(yaw * 0.5),
+    sy = Math.sin(yaw * 0.5);
+  const cp = Math.cos(pitch * 0.5),
+    sp = Math.sin(pitch * 0.5);
+  const cr = Math.cos(roll * 0.5),
+    sr = Math.sin(roll * 0.5);
 
   return {
     w: cr * cp * cy + sr * sp * sy,
@@ -119,7 +133,9 @@ function accelMagToQuat(accel: SensorData, mag: SensorData): Quaternion {
 }
 
 function fusionLoop(): void {
-  if (!running) {return;}
+  if (!running) {
+    return;
+  }
 
   if (latestGyro && lastGyroTimestamp > 0) {
     const dt = (latestGyro.timestamp - lastGyroTimestamp) / 1000;
@@ -134,14 +150,20 @@ function fusionLoop(): void {
       }
     }
   }
-  if (latestGyro) {lastGyroTimestamp = latestGyro.timestamp;}
+  if (latestGyro) {
+    lastGyroTimestamp = latestGyro.timestamp;
+  }
 
-  for (const cb of listeners) {cb(currentOrientation);}
+  for (const cb of listeners) {
+    cb(currentOrientation);
+  }
   animFrameId = requestAnimationFrame(fusionLoop);
 }
 
 export function start(): void {
-  if (running) {return;}
+  if (running) {
+    return;
+  }
   running = true;
   lastGyroTimestamp = 0;
   animFrameId = requestAnimationFrame(fusionLoop);
@@ -167,6 +189,12 @@ export function onOrientationUpdate(callback: OrientationCallback): () => void {
 }
 
 // Sensor data injection (called by platform sensor subscriptions)
-export function feedAccelerometer(data: SensorData): void { latestAccel = data; }
-export function feedGyroscope(data: SensorData): void { latestGyro = data; }
-export function feedMagnetometer(data: SensorData): void { latestMag = data; }
+export function feedAccelerometer(data: SensorData): void {
+  latestAccel = data;
+}
+export function feedGyroscope(data: SensorData): void {
+  latestGyro = data;
+}
+export function feedMagnetometer(data: SensorData): void {
+  latestMag = data;
+}

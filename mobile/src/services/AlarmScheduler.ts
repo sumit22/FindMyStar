@@ -14,7 +14,9 @@ import * as VisibilityService from './VisibilityService';
 import * as LocationService from './LocationService';
 
 // Notification API - will be bound at initialization
-let scheduleNotification: ((id: number, title: string, message: string, fireDate: Date) => void) | null = null;
+let scheduleNotification:
+  | ((id: number, title: string, message: string, fireDate: Date) => void)
+  | null = null;
 let cancelNotification: ((id: number) => void) | null = null;
 
 /**
@@ -99,9 +101,15 @@ export async function toggleAlarm(alarmId: number, enabled: boolean): Promise<vo
 export async function listAlarms(): Promise<CatalogRepo.TrackedObject[]> {
   const alarms = await CatalogRepo.getTrackedObjects();
   return alarms.sort((a, b) => {
-    if (a.nextRiseMs === null && b.nextRiseMs === null) {return 0;}
-    if (a.nextRiseMs === null) {return 1;}
-    if (b.nextRiseMs === null) {return -1;}
+    if (a.nextRiseMs === null && b.nextRiseMs === null) {
+      return 0;
+    }
+    if (a.nextRiseMs === null) {
+      return 1;
+    }
+    if (b.nextRiseMs === null) {
+      return -1;
+    }
     return a.nextRiseMs - b.nextRiseMs;
   });
 }
@@ -115,15 +123,17 @@ export async function recalculateAll(): Promise<void> {
   const alarms = await CatalogRepo.getTrackedObjects();
 
   for (const alarm of alarms) {
-    if (!alarm.enabled) {continue;}
+    if (!alarm.enabled) {
+      continue;
+    }
 
     try {
       const obj = await CatalogRepo.getById(alarm.objectId);
-      if (!obj) {continue;}
+      if (!obj) {
+        continue;
+      }
 
-      const riseSet = await VisibilityService.computeRiseSet(
-        obj, alarm.lat, alarm.lon,
-      );
+      const riseSet = await VisibilityService.computeRiseSet(obj, alarm.lat, alarm.lon);
 
       await CatalogRepo.updateTrackedObject(alarm.id, {
         nextRiseMs: riseSet.riseTime,

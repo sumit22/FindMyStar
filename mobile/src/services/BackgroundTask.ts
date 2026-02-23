@@ -28,7 +28,9 @@ function getTodayString(): string {
  */
 async function recalculateIfNeeded(): Promise<void> {
   const today = getTodayString();
-  if (lastRecalcDate === today) {return;}
+  if (lastRecalcDate === today) {
+    return;
+  }
 
   try {
     await AlarmScheduler.recalculateAll();

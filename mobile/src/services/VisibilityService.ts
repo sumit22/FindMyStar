@@ -9,14 +9,14 @@ import * as Core from '../native/FindMyStarCore';
 import { CelestialObject } from '../data/CatalogRepository';
 
 export interface RiseSetInfo {
-  riseTime: number | null;   // Unix ms, null if circumpolar/never-visible
+  riseTime: number | null; // Unix ms, null if circumpolar/never-visible
   setTime: number | null;
   isCircumpolar: boolean;
   isNeverVisible: boolean;
 }
 
 export interface OptimalViewingResult {
-  windowStart: number;    // Unix ms
+  windowStart: number; // Unix ms
   windowEnd: number;
   peakTime: number;
   peakAltitude: number;
@@ -25,10 +25,18 @@ export interface OptimalViewingResult {
 
 /** Map CelestialObject type/fields to FFI objectType + objectId */
 function resolveObjectParams(obj: CelestialObject): { objectType: number; objectId: number } {
-  if (obj.type === 'sun') {return { objectType: Core.ObjectType.Sun, objectId: 0 };}
-  if (obj.type === 'moon') {return { objectType: Core.ObjectType.Moon, objectId: 0 };}
-  if (obj.planetId != null) {return { objectType: Core.ObjectType.Planet, objectId: obj.planetId };}
-  if (obj.hipId != null) {return { objectType: Core.ObjectType.Star, objectId: obj.hipId };}
+  if (obj.type === 'sun') {
+    return { objectType: Core.ObjectType.Sun, objectId: 0 };
+  }
+  if (obj.type === 'moon') {
+    return { objectType: Core.ObjectType.Moon, objectId: 0 };
+  }
+  if (obj.planetId != null) {
+    return { objectType: Core.ObjectType.Planet, objectId: obj.planetId };
+  }
+  if (obj.hipId != null) {
+    return { objectType: Core.ObjectType.Star, objectId: obj.hipId };
+  }
   // Deep-sky objects with fixed RA/Dec: treat as star with id 0 (will use RA/Dec directly)
   return { objectType: Core.ObjectType.Star, objectId: 0 };
 }
@@ -91,13 +99,8 @@ export async function getCurrentAltAz(
 /**
  * Get the current twilight state based on the sun's altitude.
  */
-export async function getTwilightState(
-  lat: number,
-  lon: number,
-): Promise<number> {
-  const sunTracking = await Core.computeTracking(
-    Core.ObjectType.Sun, 0, lat, lon, Date.now(),
-  );
+export async function getTwilightState(lat: number, lon: number): Promise<number> {
+  const sunTracking = await Core.computeTracking(Core.ObjectType.Sun, 0, lat, lon, Date.now());
   return Core.classifyTwilight(sunTracking.altitude);
 }
 
@@ -161,7 +164,9 @@ export async function computeOptimalViewing(
     const visible = objTracking.altitude >= minAltitude && sunTracking.altitude < -6;
 
     if (visible) {
-      if (windowStart < 0) {windowStart = t;}
+      if (windowStart < 0) {
+        windowStart = t;
+      }
       windowEnd = t;
       if (objTracking.altitude > bestAlt) {
         bestAlt = objTracking.altitude;
@@ -171,7 +176,9 @@ export async function computeOptimalViewing(
     }
   }
 
-  if (bestTime < 0) {return null;}
+  if (bestTime < 0) {
+    return null;
+  }
 
   return {
     windowStart,
