@@ -12,12 +12,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [dependencies]
 libm = "0.2"
 
-[dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
+# [dev-dependencies]
+# criterion = { version = "0.5", features = ["html_reports"] }
+# TODO: Re-enable when MSVC build tools are installed (VIS-006)
 
-[[bench]]
-name = "computation_benchmarks"
-harness = false
+# [[bench]]
+# name = "computation_benchmarks"
+# harness = false
 
 [profile.release]
 opt-level = 3

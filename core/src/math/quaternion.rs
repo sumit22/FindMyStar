@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn test_conjugate_undoes_rotation() {
-        let half_angle = 0.3;
+        let half_angle: f64 = 0.3;
         let q = Quaternion::new(half_angle.cos(), half_angle.sin(), 0.0, 0.0);
         let v = Vector3::new(1.0, 2.0, 3.0);
         let rotated = q.rotate_vector(&v);
