@@ -1,21 +1,16 @@
 import { create } from 'zustand';
+import * as CatalogRepo from '../data/CatalogRepository';
 
-export interface CelestialObject {
-  id: number;
-  name: string;
-  commonName: string | null;
-  type: 'star' | 'planet' | 'nebula' | 'galaxy' | 'cluster' | 'planetary_nebula' | 'moon' | 'sun';
-  ra: number | null;
-  dec: number | null;
-  magnitude: number;
-  hipId: number | null;
-  planetId: number | null;
-  distanceLy: number | null;
-  description: string | null;
-}
+// Re-export the canonical CelestialObject type from the repository
+export type { CelestialObject } from '../data/CatalogRepository';
+import type { CelestialObject } from '../data/CatalogRepository';
+
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+const SEARCH_DEBOUNCE_MS = 300;
 
 interface CatalogState {
   objects: CelestialObject[];
+  searchResults: CelestialObject[];
   searchQuery: string;
   filterType: string | null;
   loading: boolean;
@@ -24,30 +19,13 @@ interface CatalogState {
   setSearchQuery: (query: string) => void;
   setFilterType: (type: string | null) => void;
   loadCatalog: () => Promise<void>;
+  searchObjects: (query: string) => void;
+  getObjectById: (id: number) => Promise<CelestialObject | null>;
 }
 
-function applyFilters(
-  objects: CelestialObject[],
-  query: string,
-  filterType: string | null,
-): CelestialObject[] {
-  let result = objects;
-  if (query.length > 0) {
-    const q = query.toLowerCase();
-    result = result.filter(
-      o =>
-        o.name.toLowerCase().includes(q) ||
-        (o.commonName && o.commonName.toLowerCase().includes(q)),
-    );
-  }
-  if (filterType) {
-    result = result.filter(o => o.type === filterType);
-  }
-  return result;
-}
-
-export const useCatalogStore = create<CatalogState>((set) => ({
+export const useCatalogStore = create<CatalogState>((set, get) => ({
   objects: [],
+  searchResults: [],
   searchQuery: '',
   filterType: null,
   loading: false,
@@ -55,24 +33,59 @@ export const useCatalogStore = create<CatalogState>((set) => ({
 
   setSearchQuery: (query: string) => set({ searchQuery: query }),
 
-  setFilterType: (type: string | null) => set({ filterType: type }),
+  setFilterType: (type: string | null) => {
+    set({ filterType: type });
+    // Re-run search with new filter
+    const q = get().searchQuery;
+    if (q.length > 0) {
+      get().searchObjects(q);
+    }
+  },
 
   loadCatalog: async () => {
     set({ loading: true, error: null });
     try {
-      // Will be implemented by DATA-006 CatalogRepository
-      const objects: CelestialObject[] = [];
+      const objects = await CatalogRepo.getAllObjects();
       set({ objects, loading: false });
     } catch (e) {
       set({ loading: false, error: e instanceof Error ? e.message : 'Failed to load catalog' });
     }
   },
+
+  searchObjects: (query: string) => {
+    set({ searchQuery: query });
+
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+
+    if (query.length === 0) {
+      set({ searchResults: [] });
+      return;
+    }
+
+    searchDebounceTimer = setTimeout(async () => {
+      set({ loading: true });
+      try {
+        const results = await CatalogRepo.search(query, 50);
+        const filterType = get().filterType;
+        const filtered = filterType
+          ? results.filter(o => o.type === filterType)
+          : results;
+        set({ searchResults: filtered, loading: false });
+      } catch (e) {
+        set({ loading: false, error: e instanceof Error ? e.message : 'Search failed' });
+      }
+    }, SEARCH_DEBOUNCE_MS);
+  },
+
+  getObjectById: async (id: number) => {
+    return CatalogRepo.getById(id);
+  },
 }));
 
-// Derived selector: filtered objects (computed outside store to avoid stale closures)
+// Derived selector: filtered objects for browsing (non-search)
 export function useFilteredObjects(): CelestialObject[] {
   const objects = useCatalogStore(s => s.objects);
-  const query = useCatalogStore(s => s.searchQuery);
   const filterType = useCatalogStore(s => s.filterType);
-  return applyFilters(objects, query, filterType);
+  if (!filterType) return objects;
+  return objects.filter(o => o.type === filterType);
 }
