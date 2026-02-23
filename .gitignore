@@ -37,6 +37,7 @@ Thumbs.db
 .env.production
 
 # Database (built artifact, not source)
+/db/findmystar.db
 /mobile/assets/findmystar.db
 
 # Coverage
