@@ -1,0 +1,46 @@
+/**
+ * REL-007: Android Release Build Configuration
+ *
+ * Usage: Include in app/build.gradle with:
+ *   apply from: '../release-signing.gradle'
+ *
+ * Requires environment variables or local.properties:
+ *   FINDMYSTAR_UPLOAD_STORE_FILE - path to keystore
+ *   FINDMYSTAR_UPLOAD_STORE_PASSWORD - keystore password
+ *   FINDMYSTAR_UPLOAD_KEY_ALIAS - key alias
+ *   FINDMYSTAR_UPLOAD_KEY_PASSWORD - key password
+ */
+
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
+android {
+    signingConfigs {
+        release {
+            storeFile file(keystoreProperties['storeFile'] ?: System.getenv('FINDMYSTAR_UPLOAD_STORE_FILE') ?: 'release.keystore')
+            storePassword keystoreProperties['storePassword'] ?: System.getenv('FINDMYSTAR_UPLOAD_STORE_PASSWORD') ?: ''
+            keyAlias keystoreProperties['keyAlias'] ?: System.getenv('FINDMYSTAR_UPLOAD_KEY_ALIAS') ?: ''
+            keyPassword keystoreProperties['keyPassword'] ?: System.getenv('FINDMYSTAR_UPLOAD_KEY_PASSWORD') ?: ''
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    // App Bundle (AAB) for Play Store
+    bundle {
+        language { enableSplit = true }
+        density { enableSplit = true }
+        abi { enableSplit = true }
+    }
+}

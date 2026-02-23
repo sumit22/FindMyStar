@@ -2,161 +2,74 @@
 
 All notable changes to FindMyStar will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### In Development
+### Added
 
-- [ ] Phase 1 MVP core functionality
-- [ ] Rust domain engine implementation
-- [ ] React Native mobile UI
-- [ ] Database schema finalization
+**Rust Core Engine**
+- Vector3, Quaternion math with zero-vector safety guards
+- Julian Date / Sidereal Time conversions (IAU polynomial)
+- RA/Dec to Alt/Az coordinate transforms
+- Sun position (simplified Meeus model, <5 arcmin accuracy)
+- Moon position (6-term principal model, ~1-5 degree accuracy)
+- Planet positions (Keplerian orbital elements, 7 planets)
+- Star catalog (500+ stars from Hipparcos, mag < 5.0)
+- Analytical rise/set for stars with atmospheric refraction (h0=-0.5667)
+- Iterative rise/set for planets/Moon (48h scan + binary search to <60s)
+- Circumpolar detection and twilight classification
+- FFI exports (19 extern "C" functions with panic containment)
+- Validation test suite (28 tests against USNO/JPL/SOFA/Hipparcos)
+- Edge case test suite (polar latitudes, extreme dates, NaN safety)
+- Performance benchmarks (core computations)
 
----
+**SQLite Catalog Database (~620 objects)**
+- Solar system: Sun, Moon, 8 planets
+- Stars: ~500 brightest (Hipparcos mag < 5.0) with proper names
+- Messier catalog: 110 deep-sky objects (nebulae, galaxies, clusters)
+- Schema with indexes, foreign keys, CHECK constraints, WAL mode
 
-## [1.0.0] - 2026-06-15 (Projected)
+**React Native Mobile App (iOS 14+ / Android 10+)**
+- Search screen with debounced catalog search and type icons
+- Object info screen with 1Hz alt/az position updates
+- AR tracking screen with directional arrow and lock detection
+- Alarms screen with toggle, long-press delete, pull-to-refresh
+- Settings screen (theme, notifications, altitude threshold)
+- Dark/Light/System theme support with status bar adaptation
+- Zustand state management (catalog, tracking, preferences)
+- AsyncStorage persistence for user preferences
+- Deep link handling for notification taps (cold + warm start)
+- Background midnight recalculation with foreground fallback
 
-### Phase 1: MVP Release
+**Native Bridge Modules**
+- Android: Kotlin AstronomyBridgeModule with JNI + System.loadLibrary
+- iOS: Swift AstronomyBridge with C ABI + ObjC RCT_EXTERN macros
 
-#### Added
+**TypeScript Service Layer**
+- VisibilityService (rise/set, current alt/az, twilight state)
+- ObjectTrackingService (30+ FPS loop, lock detection with hysteresis)
+- AlarmScheduler (CRUD, OS notifications, recalculation)
+- LocationService (GPS, timeout, fallback, permission handling)
+- SensorFusionService (complementary filter, 30+ Hz)
+- BackgroundTask (midnight recalculation, AppState listener)
 
-**Core Mathematics**
-- Sidereal time computation (GMST + LST)
-- RA/Dec to Alt/Az coordinate transformation
-- Julian Date calculations
-- Quaternion-based device orientation
-- Angular error computation (3D vector math)
+**CI/CD Pipeline**
+- Rust checks (fmt, clippy, test, security audit)
+- TypeScript checks (ESLint, Prettier, tsc, Jest, npm audit)
+- Mobile builds (Android debug APK, iOS simulator)
+- Nightly validation at 03:00 UTC
+- Weekly security audit (Mondays 06:00 UTC)
+- Release workflow with Android AAB + iOS archive artifacts
 
-**Celestial Objects**
-- Sun position ephemeris
-- Moon position ephemeris (simplified)
-- 8 major planets (VSOP87 model)
-- 100-500 brightest stars (Hipparcos catalog)
-- ~110 Messier deep sky objects
-
-**AR Guidance System**
-- Real-time object tracking (30+ FPS)
-- Directional arrow overlay
-- Angular distance display
-- Target lock state indicator (< 0.5° threshold)
-- Proximity-based color feedback (red/yellow/green)
-
-**Visibility System**
-- Current altitude computation
-- Rise/set time calculation (analytical for stars, iterative for planets)
-- Circumpolar detection
-- Never-visible detection
-- Sun altitude filtering (civil twilight)
-
-**Alarm System**
-- Set visibility alerts
-- Local OS notifications
-- Daily alarm recalculation
-- SQLite persistence for tracked objects
-
-**User Interfaces**
-- Search screen (by object name)
-- AR tracking screen (camera-based guidance)
-- Object info screen (metadata + visibility)
-- Alarm management screen
-
-**Data & Persistence**
-- SQLite database (local only)
-- Pre-loaded celestial catalog
-- User preferences storage
-- Backup & corruption recovery
-
-#### Technical
-
-- Rust core engine (all astronomy algorithms)
-- React Native mobile app
-- Native bridges (Android JNI, iOS Objective-C)
-- ARCore integration (Android)
-- ARKit integration (iOS)
-- GPS + IMU sensor fusion
-- Offline-first architecture
-
-#### Performance
-
-- Position computation: < 10ms
-- AR frame rate: 30+ FPS
-- Memory footprint: ~80MB
-- Battery drain: ~8% per hour (AR mode)
-- App size: < 100MB
-
-#### Documentation
-
-- Software Requirements Specification (SRS)
-- System architecture documentation
-- Algorithm reference guide
-- Database schema documentation
-- API contracts
-- Contributing guidelines
-
----
-
-## [1.1.0] - 2026-09-15 (Projected)
-
-### Phase 2: Growth & Enhancements
-
-#### Added
-
-**New Objects**
-- Satellite tracking (ISS, Starlink, etc.)
-- TLE-based orbital propagation (SGP4)
-- Comet position predictions
-- Meteor shower radiant points
-- Variable star magnitude tracking
-
-**Features**
-- Satellite pass predictions
-- Brightness alerts
-- Observation logging (local history)
-- Manual alignment calibration (2-star/3-star)
-- Customizable altitude thresholds
-- Advanced search filters
-
-**Performance**
-- Caching layer for orbit predictions
-- Optimized batch calculations
-- 60 FPS baseline (increased from 30)
-
-#### Documentation
-
-- Algorithm validation against USNO/JPL
-- Testing strategy & benchmarks
-- Architecture Decision Records (ADRs)
-
----
-
-## [1.2.0] - 2026-12-15 (Projected)
-
-### Phase 3: Telescope & Astrophotography
-
-#### Added
-
-**Telescope Integration**
-- Digital setting circles (manual telescope assist)
-- 2-star/3-star alignment calibration
-- Field of view preview
-- Polar alignment assistant
-
-**Astrophotography**
-- Exposure time recommendations
-- Optimal altitude alerts
-- Meridian flip prediction
-- Light pollution awareness
-
-**Cloud (Optional Premium)**
-- Observation history sync (user opt-in)
-- Multi-device support (Enterprise only)
-- Privacy-controlled sharing
-
-#### Monetization
-
-- Premium tier launch
-- Professional licensing tier
+**Testing Infrastructure**
+- Detox E2E tests (search/track flow, alarm flow)
+- Performance E2E benchmarks (search latency, navigation timing)
+- Offline verification tests (airplane mode)
+- Battery usage test framework
+- Edge case test suite (polar latitudes, extreme dates, NaN safety)
+- Release checklist script with automated verification
 
 ---
 
@@ -166,39 +79,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **MINOR**: New features, new objects, new capabilities (backward compatible)
 - **PATCH**: Bug fixes, performance improvements, documentation updates
 
-For issues/PRs, use:
-- `bug`: Fix → PATCH
-- `feature`: New functionality → MINOR  
-- `breaking`: Architecture change → MAJOR
-
----
-
 ## Compatibility
 
 ### Minimum Supported Versions
-
 - **iOS**: 14.0+
 - **Android**: 10.0+ (API 29)
-- **React Native**: 0.68+
+- **React Native**: 0.78+
 - **Rust**: 1.70.0+
-
-### Data Compatibility
-
-- ✅ Database migrations are backward compatible
-- ✅ Old app can run with newer database schema
-- ✅ New app gracefully handles old database
-
-### Breaking Changes
-
-None yet (since we haven't released v1.0 publicly).
-
----
-
-## References
-
-- [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
-- [Semantic Versioning](https://semver.org/)
-
----
-
-**Last Updated**: February 2026
