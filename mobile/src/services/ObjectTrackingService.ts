@@ -39,10 +39,10 @@ let isLocked = false;
 let belowThresholdSince = 0;
 
 function resolveObjectParams(obj: CelestialObject): { objectType: number; objectId: number } {
-  if (obj.type === 'sun') return { objectType: Core.ObjectType.Sun, objectId: 0 };
-  if (obj.type === 'moon') return { objectType: Core.ObjectType.Moon, objectId: 0 };
-  if (obj.planetId != null) return { objectType: Core.ObjectType.Planet, objectId: obj.planetId };
-  if (obj.hipId != null) return { objectType: Core.ObjectType.Star, objectId: obj.hipId };
+  if (obj.type === 'sun') {return { objectType: Core.ObjectType.Sun, objectId: 0 };}
+  if (obj.type === 'moon') {return { objectType: Core.ObjectType.Moon, objectId: 0 };}
+  if (obj.planetId != null) {return { objectType: Core.ObjectType.Planet, objectId: obj.planetId };}
+  if (obj.hipId != null) {return { objectType: Core.ObjectType.Star, objectId: obj.hipId };}
   return { objectType: Core.ObjectType.Star, objectId: 0 };
 }
 
@@ -79,7 +79,7 @@ function updateLockState(angularDist: number, now: number): boolean {
 }
 
 async function trackingLoop(): Promise<void> {
-  if (!active || !targetParams) return;
+  if (!active || !targetParams) {return;}
 
   const now = Date.now();
 
@@ -114,7 +114,7 @@ async function trackingLoop(): Promise<void> {
       isLocked: locked,
     };
 
-    for (const cb of listeners) cb(frame);
+    for (const cb of listeners) {cb(frame);}
   } catch {
     // Skip frame on error, retry next frame
   }

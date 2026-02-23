@@ -33,7 +33,7 @@ function AppContent(): React.JSX.Element {
 
     // Handle link that opened the app (cold start)
     Linking.getInitialURL().then(url => {
-      if (url) handleDeepLink({ url });
+      if (url) {handleDeepLink({ url });}
     });
 
     // Handle links while app is running (warm start)

@@ -105,7 +105,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
 
   toggleAlarm: async (alarmId) => {
     const obj = get().trackedObjects.find(o => o.id === alarmId);
-    if (!obj) return;
+    if (!obj) {return;}
     try {
       await AlarmScheduler.toggleAlarm(alarmId, !obj.enabled);
       set((state) => ({

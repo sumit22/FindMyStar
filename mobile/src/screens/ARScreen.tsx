@@ -24,8 +24,8 @@ function getArrowColor(
   distance: number,
   colors: AppColors,
 ): string {
-  if (distance < 1) return colors.arLocked;
-  if (distance < 5) return colors.warning;
+  if (distance < 1) {return colors.arLocked;}
+  if (distance < 5) {return colors.warning;}
   return colors.error;
 }
 
@@ -121,7 +121,7 @@ export default function ARScreen(): React.JSX.Element {
     let cancelled = false;
     async function init() {
       const obj = await getObjectById(objectId);
-      if (cancelled || !obj) return;
+      if (cancelled || !obj) {return;}
       setObjectName(obj.commonName ?? obj.name);
       await startTracking(obj);
     }

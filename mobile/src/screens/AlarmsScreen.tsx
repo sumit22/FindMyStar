@@ -18,7 +18,7 @@ import type { RootStackParamList } from '../navigation/types';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 function formatTime(ms: number | null): string {
-  if (ms === null) return 'Calculating...';
+  if (ms === null) {return 'Calculating...';}
   const d = new Date(ms);
   const now = new Date();
   const isToday = d.toDateString() === now.toDateString();
@@ -27,8 +27,8 @@ function formatTime(ms: number | null): string {
   const isTomorrow = d.toDateString() === tomorrow.toDateString();
 
   const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  if (isToday) return `Today ${timeStr}`;
-  if (isTomorrow) return `Tomorrow ${timeStr}`;
+  if (isToday) {return `Today ${timeStr}`;}
+  if (isTomorrow) {return `Tomorrow ${timeStr}`;}
   return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${timeStr}`;
 }
 

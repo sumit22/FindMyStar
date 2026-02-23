@@ -23,7 +23,7 @@ type Route = RouteProp<RootStackParamList, 'ObjectInfo'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 function formatTime(ms: number | null): string {
-  if (ms === null) return '--:--';
+  if (ms === null) {return '--:--';}
   const d = new Date(ms);
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
@@ -67,7 +67,7 @@ export default function ObjectInfoScreen(): React.JSX.Element {
       } catch {
         // Position data unavailable
       }
-      if (!cancelled) setLoading(false);
+      if (!cancelled) {setLoading(false);}
     }
 
     load();
@@ -76,7 +76,7 @@ export default function ObjectInfoScreen(): React.JSX.Element {
 
   // Refresh alt/az every second
   useEffect(() => {
-    if (!obj) return;
+    if (!obj) {return;}
     const interval = setInterval(async () => {
       try {
         const loc = LocationService.getLastKnown();
@@ -90,11 +90,11 @@ export default function ObjectInfoScreen(): React.JSX.Element {
   }, [obj]);
 
   const handleTrack = useCallback(() => {
-    if (obj) navigation.navigate('AR', { objectId: obj.id });
+    if (obj) {navigation.navigate('AR', { objectId: obj.id });}
   }, [navigation, obj]);
 
   const handleSetAlarm = useCallback(async () => {
-    if (obj) await createAlarm(obj.id);
+    if (obj) {await createAlarm(obj.id);}
   }, [createAlarm, obj]);
 
   if (loading) {

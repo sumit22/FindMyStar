@@ -99,9 +99,9 @@ export async function toggleAlarm(alarmId: number, enabled: boolean): Promise<vo
 export async function listAlarms(): Promise<CatalogRepo.TrackedObject[]> {
   const alarms = await CatalogRepo.getTrackedObjects();
   return alarms.sort((a, b) => {
-    if (a.nextRiseMs === null && b.nextRiseMs === null) return 0;
-    if (a.nextRiseMs === null) return 1;
-    if (b.nextRiseMs === null) return -1;
+    if (a.nextRiseMs === null && b.nextRiseMs === null) {return 0;}
+    if (a.nextRiseMs === null) {return 1;}
+    if (b.nextRiseMs === null) {return -1;}
     return a.nextRiseMs - b.nextRiseMs;
   });
 }
@@ -115,11 +115,11 @@ export async function recalculateAll(): Promise<void> {
   const alarms = await CatalogRepo.getTrackedObjects();
 
   for (const alarm of alarms) {
-    if (!alarm.enabled) continue;
+    if (!alarm.enabled) {continue;}
 
     try {
       const obj = await CatalogRepo.getById(alarm.objectId);
-      if (!obj) continue;
+      if (!obj) {continue;}
 
       const riseSet = await VisibilityService.computeRiseSet(
         obj, alarm.lat, alarm.lon,

@@ -128,6 +128,6 @@ export function getLastKnown(): Location | null {
 }
 
 export function isStale(): boolean {
-  if (!lastKnown) return true;
+  if (!lastKnown) {return true;}
   return Date.now() - lastKnown.timestamp > 3600000; // 1 hour
 }

@@ -41,7 +41,7 @@ let latestMag: SensorData | null = null;
 
 function normalize(q: Quaternion): Quaternion {
   const mag = Math.sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
-  if (mag < 1e-10) return { w: 1, x: 0, y: 0, z: 0 };
+  if (mag < 1e-10) {return { w: 1, x: 0, y: 0, z: 0 };}
   return { w: q.w / mag, x: q.x / mag, y: q.y / mag, z: q.z / mag };
 }
 
@@ -95,7 +95,7 @@ function accelMagToQuat(accel: SensorData, mag: SensorData): Quaternion {
   // Simplified tilt-compensated compass orientation
   const ax = accel.x, ay = accel.y, az = accel.z;
   const norm = Math.sqrt(ax * ax + ay * ay + az * az);
-  if (norm < 1e-6) return currentOrientation;
+  if (norm < 1e-6) {return currentOrientation;}
 
   const pitch = Math.atan2(-ax, Math.sqrt(ay * ay + az * az));
   const roll = Math.atan2(ay, az);
@@ -119,7 +119,7 @@ function accelMagToQuat(accel: SensorData, mag: SensorData): Quaternion {
 }
 
 function fusionLoop(): void {
-  if (!running) return;
+  if (!running) {return;}
 
   if (latestGyro && lastGyroTimestamp > 0) {
     const dt = (latestGyro.timestamp - lastGyroTimestamp) / 1000;
@@ -134,14 +134,14 @@ function fusionLoop(): void {
       }
     }
   }
-  if (latestGyro) lastGyroTimestamp = latestGyro.timestamp;
+  if (latestGyro) {lastGyroTimestamp = latestGyro.timestamp;}
 
-  for (const cb of listeners) cb(currentOrientation);
+  for (const cb of listeners) {cb(currentOrientation);}
   animFrameId = requestAnimationFrame(fusionLoop);
 }
 
 export function start(): void {
-  if (running) return;
+  if (running) {return;}
   running = true;
   lastGyroTimestamp = 0;
   animFrameId = requestAnimationFrame(fusionLoop);

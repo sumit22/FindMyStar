@@ -116,7 +116,7 @@ function mapTrackedRow(row: Record<string, unknown>): TrackedObject {
 }
 
 async function getDb(): Promise<SQLiteDatabase> {
-  if (db) return db;
+  if (db) {return db;}
   db = await SQLite.openDatabase({
     name: 'findmystar.db',
     location: 'default',
@@ -152,7 +152,7 @@ async function execute(sql: string, params: (string | number | null)[]): Promise
 export async function search(queryStr: string, limit = 50): Promise<CelestialObject[]> {
   const pattern = `%${queryStr}%`;
   return query(
-    `SELECT * FROM objects WHERE name LIKE ? OR common_name LIKE ? ORDER BY magnitude ASC LIMIT ?`,
+    'SELECT * FROM objects WHERE name LIKE ? OR common_name LIKE ? ORDER BY magnitude ASC LIMIT ?',
     [pattern, pattern, limit],
     mapRow,
   );
@@ -160,8 +160,8 @@ export async function search(queryStr: string, limit = 50): Promise<CelestialObj
 
 export async function getById(id: number): Promise<CelestialObject | null> {
   const cached = objectCache.get(id);
-  if (cached) return cached;
-  const rows = await query(`SELECT * FROM objects WHERE id = ?`, [id], mapRow);
+  if (cached) {return cached;}
+  const rows = await query('SELECT * FROM objects WHERE id = ?', [id], mapRow);
   if (rows.length > 0) {
     objectCache.set(id, rows[0]);
     return rows[0];
@@ -170,15 +170,15 @@ export async function getById(id: number): Promise<CelestialObject | null> {
 }
 
 export async function getByType(type: string): Promise<CelestialObject[]> {
-  return query(`SELECT * FROM objects WHERE type = ? ORDER BY magnitude ASC`, [type], mapRow);
+  return query('SELECT * FROM objects WHERE type = ? ORDER BY magnitude ASC', [type], mapRow);
 }
 
 export async function getAllObjects(): Promise<CelestialObject[]> {
-  return query(`SELECT * FROM objects ORDER BY magnitude ASC`, [], mapRow);
+  return query('SELECT * FROM objects ORDER BY magnitude ASC', [], mapRow);
 }
 
 export async function getTrackedObjects(): Promise<TrackedObject[]> {
-  return query(`SELECT * FROM tracked_objects ORDER BY id ASC`, [], mapTrackedRow);
+  return query('SELECT * FROM tracked_objects ORDER BY id ASC', [], mapTrackedRow);
 }
 
 export async function createTrackedObject(
@@ -216,13 +216,13 @@ export async function updateTrackedObject(
   if (config.nextRiseMs !== undefined) { sets.push('next_rise_ms = ?'); params.push(config.nextRiseMs); }
   if (config.nextSetMs !== undefined) { sets.push('next_set_ms = ?'); params.push(config.nextSetMs); }
 
-  if (sets.length === 0) return;
+  if (sets.length === 0) {return;}
   params.push(id);
   await execute(`UPDATE tracked_objects SET ${sets.join(', ')} WHERE id = ?`, params);
 }
 
 export async function deleteTrackedObject(id: number): Promise<void> {
-  await execute(`DELETE FROM tracked_objects WHERE id = ?`, [id]);
+  await execute('DELETE FROM tracked_objects WHERE id = ?', [id]);
 }
 
 export function clearCache(): void {
