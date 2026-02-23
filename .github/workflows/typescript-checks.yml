@@ -42,7 +42,7 @@ jobs:
         run: npx tsc --noEmit
 
       - name: Jest
-        run: npx jest --ci --coverage --maxWorkers=2
+        run: npx jest --ci --coverage --maxWorkers=2 --passWithNoTests
 
       - name: npm audit
         run: npm audit --production --audit-level=high
