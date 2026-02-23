@@ -1,0 +1,107 @@
+@startuml component-diagram
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title FindMyStar - Component Diagram (C4 Level 2)
+
+LAYOUT_WITH_LEGEND()
+
+Person(user, "Stargazer", "Casual or hobby astronomer")
+
+System_Ext(gps, "Device GPS", "Location services")
+System_Ext(imu, "Device IMU", "Gyroscope, accelerometer, magnetometer")
+System_Ext(clock, "System Clock", "UTC time")
+System_Ext(notifications, "OS Notification Service", "WorkManager / UNUserNotificationCenter")
+System_Ext(ar, "AR Framework", "ARCore / ARKit")
+
+Container_Boundary(ui_boundary, "React Native UI") {
+    Component(search_screen, "SearchScreen", "React Native Screen", "Catalog search by name, type, or magnitude with filtered results list")
+    Component(ar_screen, "ARScreen", "React Native Screen", "Camera overlay with directional arrow, distance indicator, and lock-on feedback")
+    Component(info_screen, "ObjectInfoScreen", "React Native Screen", "Displays object details: coordinates, rise/set times, magnitude, description")
+    Component(alarm_screen, "AlarmScreen", "React Native Screen", "Manages tracked objects list, alarm settings, recurring notifications")
+    Component(nav_controller, "NavigationController", "React Navigation", "Stack and tab navigation between screens")
+    Component(state_store, "StateStore", "Redux", "Centralized state: catalog, tracking, alarms, sensors, preferences")
+}
+
+Container_Boundary(svc_boundary, "Application Services") {
+    Component(tracking_svc, "ObjectTrackingService", "TypeScript Service", "Orchestrates real-time tracking loop at 30 FPS: fuses sensor data, calls engine, returns direction")
+    Component(visibility_svc, "VisibilityService", "TypeScript Service", "Computes next visibility window for an object at a given location, checks twilight conditions")
+    Component(alarm_scheduler, "AlarmScheduler", "TypeScript Service", "Schedules and reschedules OS notifications, handles daily midnight recalculation")
+    Component(sensor_svc, "SensorFusionService", "TypeScript Service", "Fuses gyroscope, accelerometer, magnetometer into device orientation quaternion")
+    Component(location_svc, "LocationService", "TypeScript Service", "Provides current GPS coordinates with accuracy and caching of last known position")
+    Component(catalog_repo, "CatalogRepository", "TypeScript Repository", "Abstracts SQLite queries: findByName, findByType, getById, getTrackedObjects")
+}
+
+Container_Boundary(rust_boundary, "Astronomy Engine (Rust)") {
+    Component(ephemeris, "EphemerisModule", "Rust Module", "Computes RA/Dec for stars (fixed), planets (VSOP87), Sun, and Moon at any given time")
+    Component(coord_transforms, "CoordinateTransforms", "Rust Module", "Converts between equatorial (RA/Dec), horizontal (Alt/Az), and Cartesian (Vector3) systems")
+    Component(rise_set, "RiseSetSolver", "Rust Module", "Analytical H0 formula for stars, iterative scan with binary search for planets")
+    Component(vector_math, "VectorMath", "Rust Module", "Vector3 operations: normalize, dot product, cross product, angular distance")
+    Component(quaternion_ops, "QuaternionOps", "Rust Module", "Quaternion multiply, conjugate, to-forward-vector, inverse rotation")
+    Component(ffi_bridge, "FFIBridge", "Rust Module", "C-ABI extern functions exposing engine API to mobile platforms via JNI / Obj-C bridge")
+}
+
+Container_Boundary(db_boundary, "Local Database (SQLite)") {
+    Component(objects_table, "objects", "SQLite Table", "Celestial catalog: id, name, type, ra, dec, magnitude, distance_ly, description")
+    Component(tracked_table, "tracked_objects", "SQLite Table", "User alarms: object_id FK, lat, lon, min_altitude, next_visible_at, is_recurring")
+    Component(prefs_table, "user_preferences", "SQLite Table", "Singleton row: notification_enabled, min_altitude_default, auto_calibration, dark_mode")
+}
+
+' --- User to UI relationships ---
+Rel(user, search_screen, "Searches for objects")
+Rel(user, ar_screen, "Points device at sky")
+Rel(user, alarm_screen, "Sets visibility alarms")
+Rel(nav_controller, search_screen, "Routes to")
+Rel(nav_controller, ar_screen, "Routes to")
+Rel(nav_controller, info_screen, "Routes to")
+Rel(nav_controller, alarm_screen, "Routes to")
+
+' --- UI to State Store ---
+Rel(search_screen, state_store, "Dispatches search actions, reads results")
+Rel(ar_screen, state_store, "Reads tracking state")
+Rel(alarm_screen, state_store, "Reads/writes alarm list")
+
+' --- UI to AR ---
+Rel(ar_screen, ar, "Renders camera overlay")
+
+' --- UI to Services ---
+Rel(search_screen, catalog_repo, "Queries catalog")
+Rel(ar_screen, tracking_svc, "Subscribes to tracking updates")
+Rel(info_screen, visibility_svc, "Requests rise/set times")
+Rel(alarm_screen, alarm_scheduler, "Creates/deletes alarms")
+
+' --- Service internal relationships ---
+Rel(tracking_svc, sensor_svc, "Gets device orientation quaternion")
+Rel(tracking_svc, location_svc, "Gets observer GPS coordinates")
+Rel(visibility_svc, location_svc, "Gets observer location for rise/set computation")
+Rel(alarm_scheduler, visibility_svc, "Computes next visibility for rescheduling")
+Rel(alarm_scheduler, notifications, "Schedules OS local notifications")
+
+' --- Services to Rust core (FFI) ---
+Rel(tracking_svc, ffi_bridge, "computeRaDec, raDecToAltAz, computeAngularError", "FFI")
+Rel(visibility_svc, ffi_bridge, "computeRiseSet, computeSunAltitude", "FFI")
+
+' --- Rust internal relationships ---
+Rel(ffi_bridge, ephemeris, "Delegates RA/Dec computation")
+Rel(ffi_bridge, coord_transforms, "Delegates coordinate conversion")
+Rel(ffi_bridge, rise_set, "Delegates rise/set solving")
+Rel(ffi_bridge, vector_math, "Delegates vector operations")
+Rel(ffi_bridge, quaternion_ops, "Delegates quaternion operations")
+Rel(ephemeris, vector_math, "Uses vector math for position calculations")
+Rel(coord_transforms, vector_math, "Uses vector operations for transforms")
+Rel(rise_set, ephemeris, "Calls ephemeris for iterative planet rise/set")
+Rel(rise_set, coord_transforms, "Converts RA/Dec to altitude for threshold check")
+
+' --- Services to external sensors ---
+Rel(sensor_svc, imu, "Reads raw sensor data")
+Rel(location_svc, gps, "Reads GPS coordinates")
+Rel(tracking_svc, clock, "Reads current UTC time")
+
+' --- Repository to database ---
+Rel(catalog_repo, objects_table, "SELECT queries")
+Rel(catalog_repo, tracked_table, "INSERT/UPDATE/DELETE")
+Rel(catalog_repo, prefs_table, "SELECT/UPDATE")
+
+SHOW_LEGEND()
+
+footer \nFindMyStar Component Diagram (C4 Level 2)\nSee also: container-diagram.puml | architecture-overview.md\nLast Updated: February 2026
+@enduml

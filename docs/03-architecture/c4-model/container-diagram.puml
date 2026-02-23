@@ -1,0 +1,36 @@
+@startuml container-diagram
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title FindMyStar - Container Diagram (C4 Level 1)
+
+LAYOUT_WITH_LEGEND()
+
+Person(user, "Stargazer", "Casual or hobby astronomer who wants to locate celestial objects in the night sky")
+
+System_Boundary(app, "FindMyStar Mobile App") {
+    Container(ui, "React Native UI", "TypeScript / React Native", "Search, AR tracking, object info, and alarm management screens with Redux state management")
+    Container(services, "Application Services", "TypeScript", "ObjectTrackingService, VisibilityService, AlarmScheduler, SensorFusionService, CatalogRepository")
+    Container(rustcore, "Astronomy Engine", "Rust (native library via FFI)", "Ephemeris computation, coordinate transforms, rise/set solving, vector math, quaternion operations")
+    ContainerDb(sqlite, "Local Database", "SQLite 3", "Celestial object catalog (~620 objects), tracked objects with alarms, user preferences")
+}
+
+System_Ext(gps, "Device GPS", "Location services providing latitude, longitude, altitude")
+System_Ext(imu, "Device IMU", "Gyroscope, accelerometer, magnetometer for device orientation")
+System_Ext(clock, "System Clock", "UTC time from device OS")
+System_Ext(notifications, "OS Notification Service", "WorkManager (Android) / UNUserNotificationCenter (iOS)")
+System_Ext(ar, "AR Framework", "ARCore (Android) / ARKit (iOS) for camera overlay")
+
+Rel(user, ui, "Searches objects, tracks in AR, manages alarms", "Touch / Gestures")
+Rel(ui, services, "Calls application services", "TypeScript function calls")
+Rel(ui, ar, "Renders directional overlay on camera feed", "AR SDK API")
+Rel(services, rustcore, "Invokes astronomical computations", "FFI (JNI on Android / C ABI on iOS)")
+Rel(services, sqlite, "Reads catalog, writes tracked objects and preferences", "SQL queries")
+Rel(services, gps, "Reads observer location", "Platform Location API")
+Rel(services, imu, "Reads device orientation as quaternion", "Platform Sensor API")
+Rel(services, clock, "Reads current UTC time", "System API")
+Rel(services, notifications, "Schedules local rise/set alerts", "Platform Notification API")
+
+SHOW_LEGEND()
+
+footer \nFindMyStar Container Diagram (C4 Level 1)\nSee also: context-diagram.md | component-diagram.puml\nLast Updated: February 2026
+@enduml

@@ -1,0 +1,207 @@
+@startuml entity-relationship
+
+title FindMyStar - Entity Relationship Diagram (SQLite Database)
+
+skinparam linetype ortho
+skinparam class {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+}
+
+' ============================================================
+' objects table
+' ============================================================
+
+entity "objects" as objects {
+    * **id** : INTEGER <<PK, AUTOINCREMENT>>
+    --
+    * name : TEXT <<NOT NULL, UNIQUE>>
+    * type : TEXT <<NOT NULL>>
+    ra : REAL <<NULL for planets>>
+    dec : REAL <<NULL for planets>>
+    magnitude : REAL
+    distance_ly : REAL <<NULL for solar system>>
+    description : TEXT
+    created_at : INTEGER <<Unix timestamp>>
+    ==
+    **Indexes:**
+    ..
+    idx_objects_type (type)
+    idx_objects_magnitude (magnitude)
+}
+
+' ============================================================
+' tracked_objects table
+' ============================================================
+
+entity "tracked_objects" as tracked {
+    * **id** : INTEGER <<PK, AUTOINCREMENT>>
+    --
+    * object_id : INTEGER <<FK, NOT NULL, UNIQUE>>
+    * lat : REAL <<NOT NULL>>
+    * lon : REAL <<NOT NULL>>
+    min_altitude : REAL <<default 10.0>>
+    next_visible_at : INTEGER <<Unix timestamp>>
+    * is_recurring : INTEGER <<0 or 1>>
+    created_at : INTEGER <<Unix timestamp>>
+    last_notified_at : INTEGER <<Unix timestamp>>
+    ==
+    **Indexes:**
+    ..
+    idx_tracked_next_visible (next_visible_at)
+    idx_tracked_object_id (object_id)
+    ==
+    **Foreign Keys:**
+    ..
+    object_id --> objects.id
+}
+
+' ============================================================
+' user_preferences table
+' ============================================================
+
+entity "user_preferences" as prefs {
+    * **id** : INTEGER <<PK, CHECK(id=1)>>
+    --
+    notification_enabled : INTEGER <<0 or 1>>
+    min_altitude_default : REAL <<degrees>>
+    auto_calibration : INTEGER <<0 or 1>>
+    dark_mode : INTEGER <<0 or 1>>
+    ==
+    **Constraints:**
+    ..
+    Singleton: CHECK(id = 1)
+    Exactly one row at all times
+}
+
+' ============================================================
+' Relationships
+' ============================================================
+
+objects ||--o{ tracked : "1 object can have\n0..1 tracked alarm\n(object_id UNIQUE)"
+
+' ============================================================
+' Notes
+' ============================================================
+
+note right of objects
+    **Catalog Table (Read-Only at Runtime)**
+
+    Pre-populated from bundled SQLite database.
+    Contains ~620 objects in MVP:
+      - 1 Sun
+      - 1 Moon
+      - 8 Planets
+      - 100-500 Bright Stars (Hipparcos mag < 5)
+      - ~110 Messier Objects
+
+    **type** values:
+      'star', 'planet', 'moon', 'sun',
+      'nebula', 'galaxy'
+
+    **ra/dec** are NULL for planets, Sun, Moon
+    (positions computed at runtime by Rust engine).
+
+    Updated only via app version upgrades.
+end note
+
+note right of tracked
+    **User Alarm Table (Read-Write)**
+
+    Created when user sets a visibility alarm.
+    object_id is UNIQUE: one alarm per object.
+
+    **lat/lon**: Observer position captured at
+    alarm creation time.
+
+    **next_visible_at**: Recalculated daily at
+    midnight by background task (WorkManager /
+    BGTaskScheduler).
+
+    **last_notified_at**: Prevents duplicate
+    notifications for the same rise event.
+
+    **is_recurring**: If 1, alarm is rescheduled
+    after each notification. If 0, alarm is
+    deleted after firing once.
+end note
+
+note right of prefs
+    **Singleton Preferences Table**
+
+    CHECK(id = 1) ensures exactly one row.
+    Initialized on first app launch with
+    sensible defaults:
+      notification_enabled = 1
+      min_altitude_default = 10.0
+      auto_calibration = 1
+      dark_mode = 0
+
+    Boolean fields stored as INTEGER
+    (SQLite has no native BOOLEAN type).
+end note
+
+' ============================================================
+' Query pattern annotations
+' ============================================================
+
+note bottom of objects
+    **Common Queries:**
+    ----
+    Search by name:
+      SELECT * FROM objects
+      WHERE name LIKE ? ESCAPE '|'
+      ORDER BY magnitude LIMIT 20;
+
+    Filter by type:
+      SELECT * FROM objects
+      WHERE type = ?
+      ORDER BY magnitude;
+
+    Get by ID:
+      SELECT * FROM objects
+      WHERE id = ?;
+end note
+
+note bottom of tracked
+    **Common Queries:**
+    ----
+    Alarms due for recalculation:
+      SELECT o.*, t.*
+      FROM tracked_objects t
+      JOIN objects o ON t.object_id = o.id
+      WHERE t.next_visible_at < ?
+      ORDER BY t.next_visible_at;
+
+    Alarms due today:
+      SELECT * FROM tracked_objects
+      WHERE next_visible_at BETWEEN ? AND ?
+      ORDER BY next_visible_at ASC;
+
+    Reschedule alarm:
+      UPDATE tracked_objects
+      SET next_visible_at = ?,
+          last_notified_at = ?
+      WHERE id = ?;
+end note
+
+' ============================================================
+' Storage estimates
+' ============================================================
+
+legend right
+    |= Table |= Rows (MVP) |= Size Estimate |
+    | objects | ~620 | ~100 KB |
+    | tracked_objects | 0-50 | ~10 KB |
+    | user_preferences | 1 | <1 KB |
+    | Indexes | -- | ~50 KB |
+    | **Total** | | **~200 KB** |
+    ---
+    All timestamps are Unix epoch (seconds).
+    All booleans are INTEGER (0 or 1).
+    SQLite version: 3.40+
+endlegend
+
+footer \nFindMyStar Entity Relationship Diagram\nSee also: schema.md | class-diagram.puml\nLast Updated: February 2026
+
+@enduml

@@ -1,0 +1,32 @@
+@startuml
+participant "ARScreen" as Screen
+participant "SensorFusionService" as Sensor
+participant "TrackingService" as Tracking
+participant "EphemerisEngine" as Ephemeris
+participant "CoordinateEngine" as Coord
+participant "VectorMath" as Math
+
+loop Every Frame (30 FPS)
+    Screen -> Sensor: getDeviceQuaternion()
+    Sensor --> Screen: Q_device
+    
+    Screen -> Tracking: computeDirection(Q_device, time)
+    
+    Tracking -> Ephemeris: computeRA_DEC(object, time)
+    Ephemeris --> Tracking: RA, Dec
+    
+    Tracking -> Coord: RA_DEC_to_AltAz(RA, Dec, lat, lon, time)
+    Coord --> Tracking: Alt, Az
+    
+    Tracking -> Coord: AltAz_to_Vector(Alt, Az)
+    Coord --> Tracking: V_target
+    
+    Tracking -> Math: computeAngularError(V_target, Q_device)
+    Math --> Tracking: angle, direction
+    
+    Tracking --> Screen: {direction, angle, locked}
+    
+    Screen --> User: renderArrow(direction, angle)
+end
+
+@enduml

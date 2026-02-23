@@ -1,0 +1,27 @@
+@startuml
+participant "VisibilityService" as Visibility
+participant "RiseSetSolver" as Solver
+participant "EphemerisEngine" as Ephemeris
+participant "CoordinateEngine" as Coord
+
+Visibility -> Solver: computeNextRise(object)
+
+loop time = now to now+48h (step 5min)
+    Solver -> Ephemeris: computeRA_DEC(object, t)
+    Ephemeris --> Solver: RA, Dec
+    
+    Solver -> Coord: RA_DEC_to_AltAz(RA, Dec, lat, lon, t)
+    Coord --> Solver: Alt
+    
+    alt Alt crosses 0° threshold
+        Solver --> Visibility: riseTimeFound
+        break
+    end
+end
+
+note over Solver
+Result: Exact rise time via binary search
+Accuracy: ±5 minutes for planets
+end note
+
+@enduml

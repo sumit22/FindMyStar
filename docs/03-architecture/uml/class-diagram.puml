@@ -1,0 +1,217 @@
+@startuml class-diagram
+
+title FindMyStar - Domain Types and Relationships
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+skinparam packageStyle rectangle
+skinparam class {
+    BackgroundColor #FEFECE
+    BorderColor #A80036
+    ArrowColor #A80036
+}
+
+' ============================================================
+' Enumerations
+' ============================================================
+
+package "Enumerations" {
+    enum ObjectType {
+        Star
+        Planet
+        Moon
+        Sun
+        Nebula
+        Galaxy
+    }
+
+    enum VisibilityStatus {
+        Visible
+        BelowHorizon
+        Circumpolar
+        NeverVisible
+    }
+}
+
+' ============================================================
+' Core Domain Entities
+' ============================================================
+
+package "Domain Entities" {
+    class CelestialObject {
+        + id: i64
+        + name: String
+        + object_type: ObjectType
+        + ra: Option<f64>
+        + dec: Option<f64>
+        + magnitude: f64
+        + distance_ly: Option<f64>
+        + description: Option<String>
+        + created_at: i64
+    }
+
+    class TrackedObject {
+        + id: i64
+        + object_id: i64
+        + lat: f64
+        + lon: f64
+        + min_altitude: f64
+        + next_visible_at: Option<i64>
+        + is_recurring: bool
+        + created_at: i64
+        + last_notified_at: Option<i64>
+    }
+
+    class UserPreferences {
+        + id: i64
+        + notification_enabled: bool
+        + min_altitude_default: f64
+        + auto_calibration: bool
+        + dark_mode: bool
+    }
+}
+
+' ============================================================
+' Math Types (Rust Core)
+' ============================================================
+
+package "Math Types (Rust)" {
+    class Vector3 {
+        + x: f64
+        + y: f64
+        + z: f64
+        --
+        + normalize(): Vector3
+        + magnitude(): f64
+        + dot(other: Vector3): f64
+        + cross(other: Vector3): Vector3
+        + scale(scalar: f64): Vector3
+        + angle_to(other: Vector3): f64
+        + {static} from_polar(alt: f64, az: f64): Vector3
+        + {static} zero(): Vector3
+    }
+
+    class Quaternion {
+        + w: f64
+        + x: f64
+        + y: f64
+        + z: f64
+        --
+        + multiply(other: Quaternion): Quaternion
+        + conjugate(): Quaternion
+        + inverse(): Quaternion
+        + normalize(): Quaternion
+        + to_forward_vector(): Vector3
+        + rotate_vector(v: Vector3): Vector3
+        + {static} identity(): Quaternion
+        + {static} from_axis_angle(axis: Vector3, angle: f64): Quaternion
+    }
+}
+
+' ============================================================
+' Computation Result Types
+' ============================================================
+
+package "Result Types" {
+    class AltAz {
+        + altitude: f64
+        + azimuth: f64
+        + visible: bool
+        --
+        + to_vector(): Vector3
+        + is_above_horizon(): bool
+    }
+
+    class RiseSetResult {
+        + rise_time: Option<i64>
+        + set_time: Option<i64>
+        + transit_time: Option<i64>
+        + max_altitude: f64
+        + status: VisibilityStatus
+        --
+        + is_visible_now(): bool
+        + duration_above_horizon(): Option<i64>
+    }
+
+    class TrackingResult {
+        + direction: f64
+        + angle_error: f64
+        + locked: bool
+        --
+        + is_on_target(threshold: f64): bool
+    }
+
+    class Location {
+        + latitude: f64
+        + longitude: f64
+        + altitude: f64
+        + accuracy: f64
+        --
+        + is_valid(): bool
+        + distance_to(other: Location): f64
+    }
+}
+
+' ============================================================
+' Relationships
+' ============================================================
+
+' Entity relationships
+CelestialObject "1" -- "0..*" TrackedObject : tracked as >
+CelestialObject *-- ObjectType : has type >
+RiseSetResult *-- VisibilityStatus : has status >
+
+' Computation relationships
+AltAz ..> Vector3 : to_vector() creates >
+Quaternion ..> Vector3 : to_forward_vector() creates >
+Quaternion ..> Vector3 : rotate_vector() transforms >
+TrackingResult ..> Vector3 : computed from target & device vectors
+RiseSetResult ..> AltAz : derived from altitude computation
+
+' Location used by tracked objects
+TrackedObject ..> Location : observer position at alarm creation
+
+' ============================================================
+' Notes
+' ============================================================
+
+note right of CelestialObject
+    ra and dec are NULL for planets,
+    Sun, and Moon (computed at runtime
+    by EphemerisModule).
+
+    Stars have fixed ra/dec from
+    the Hipparcos catalog.
+end note
+
+note right of Vector3
+    All vectors are in a right-handed
+    coordinate system:
+      X = East
+      Y = Up (zenith)
+      Z = North
+end note
+
+note right of Quaternion
+    Represents device orientation
+    from IMU sensor fusion.
+    Used to compute camera forward
+    direction for AR tracking.
+end note
+
+note bottom of TrackedObject
+    object_id is UNIQUE: only one
+    alarm per celestial object.
+
+    lat/lon captured at alarm creation
+    time (observer may move later).
+end note
+
+note bottom of UserPreferences
+    Singleton table: id CHECK(id=1).
+    Exactly one row always exists.
+end note
+
+footer \nFindMyStar Class Diagram - Domain Types\nSee also: entity-relationship.puml | schema.md\nLast Updated: February 2026
+
+@enduml

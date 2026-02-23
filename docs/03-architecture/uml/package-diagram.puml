@@ -1,0 +1,233 @@
+@startuml package-diagram
+
+title FindMyStar - Module Organization and Dependencies
+
+skinparam packageStyle rectangle
+skinparam linetype ortho
+skinparam package {
+    BackgroundColor<<rust>> #FFE0B2
+    BackgroundColor<<ts>> #BBDEFB
+    BackgroundColor<<data>> #C8E6C9
+    BackgroundColor<<test>> #F8BBD0
+    BackgroundColor<<docs>> #E1BEE7
+    BackgroundColor<<scripts>> #CFD8DC
+    BorderColor #555555
+}
+
+' ============================================================
+' Presentation Layer (React Native / TypeScript)
+' ============================================================
+
+package "/mobile (TypeScript)" <<ts>> {
+    package "screens" <<ts>> {
+        [SearchScreen] as search
+        [ARScreen] as arscreen
+        [ObjectInfoScreen] as infoscreen
+        [AlarmScreen] as alarmscreen
+    }
+
+    package "components" <<ts>> {
+        [ArrowOverlay] as arrow
+        [ObjectCard] as card
+        [CalibrationPrompt] as calibrate
+        [SearchBar] as searchbar
+    }
+
+    package "store (Redux)" <<ts>> {
+        [catalogSlice] as catalog_slice
+        [trackingSlice] as tracking_slice
+        [alarmSlice] as alarm_slice
+        [sensorSlice] as sensor_slice
+        [preferencesSlice] as prefs_slice
+    }
+
+    package "services" <<ts>> {
+        [ObjectTrackingService] as tracking_svc
+        [VisibilityService] as visibility_svc
+        [AlarmScheduler] as alarm_svc
+        [SensorFusionService] as sensor_svc
+        [LocationService] as location_svc
+        [CatalogRepository] as catalog_repo
+    }
+
+    package "domain" <<ts>> {
+        [TypeScript Domain Models] as ts_models
+        note right of ts_models
+            Mirrors Rust types:
+            CelestialObject,
+            TrackedObject,
+            AltAz, etc.
+        end note
+    }
+
+    package "config" <<ts>> {
+        [AppConfig] as app_config
+        [Constants] as constants
+    }
+}
+
+' ============================================================
+' Domain Layer (Rust Core)
+' ============================================================
+
+package "/core (Rust)" <<rust>> {
+    package "math" <<rust>> {
+        [vector] as vec_mod
+        [quaternion] as quat_mod
+        [angles] as angle_mod
+    }
+
+    package "ephemeris" <<rust>> {
+        [sun] as sun_mod
+        [moon] as moon_mod
+        [planets (VSOP87)] as planet_mod
+        [stars] as star_mod
+    }
+
+    package "coordinates" <<rust>> {
+        [equatorial_to_horizontal] as eq_hz
+        [horizontal_to_cartesian] as hz_cart
+        [sidereal_time] as lst_mod
+    }
+
+    package "visibility" <<rust>> {
+        [rise_set_solver] as rise_set
+        [circumpolar_check] as circumpolar
+        [twilight] as twilight
+    }
+
+    package "validation" <<rust>> {
+        [ephemeris_validator] as ephem_val
+        [coordinate_validator] as coord_val
+    }
+
+    package "ffi" <<rust>> {
+        [lib.rs (public API)] as ffi_api
+    }
+}
+
+' ============================================================
+' Data Layer
+' ============================================================
+
+package "/db" <<data>> {
+    [schema.sql] as schema
+    [migrations/] as migrations
+    [seed_catalog.sql] as seed
+}
+
+' ============================================================
+' Tests
+' ============================================================
+
+package "/tests" <<test>> {
+    package "unit (Rust)" <<test>> {
+        [math_tests] as math_test
+        [ephemeris_tests] as ephem_test
+        [coordinate_tests] as coord_test
+        [rise_set_tests] as rs_test
+    }
+
+    package "integration" <<test>> {
+        [tracking_flow_tests] as track_test
+        [alarm_flow_tests] as alarm_test
+        [ffi_bridge_tests] as ffi_test
+    }
+
+    package "validation" <<test>> {
+        [usno_comparison] as usno_test
+        [known_ephemeris_data] as known_test
+    }
+
+    package "e2e (Detox)" <<test>> {
+        [search_e2e] as search_e2e
+        [tracking_e2e] as tracking_e2e
+        [alarm_e2e] as alarm_e2e
+    }
+}
+
+' ============================================================
+' Documentation
+' ============================================================
+
+package "/docs" <<docs>> {
+    [01-product] as doc_product
+    [02-requirements] as doc_reqs
+    [03-architecture] as doc_arch
+    [04-domain-engine] as doc_engine
+    [05-data-model] as doc_data
+    [08-testing] as doc_test
+    [11-adr] as doc_adr
+}
+
+' ============================================================
+' Scripts
+' ============================================================
+
+package "/scripts" <<scripts>> {
+    [build-rust.sh] as build_rust
+    [build-android.sh] as build_android
+    [build-ios.sh] as build_ios
+    [run-tests.sh] as run_tests
+    [seed-database.sh] as seed_db
+}
+
+' ============================================================
+' Dependencies (following layered architecture rules)
+' ============================================================
+
+' Presentation -> Application (screens use services)
+screens -[#0066CC]-> services : calls
+screens -[#0066CC]-> "store (Redux)" : dispatches / reads
+screens -[#0066CC]-> components : renders
+
+' Application -> Domain (services use Rust via FFI)
+services -[#FF6600]-> ffi : FFI calls\n(JNI / C ABI)
+services -[#0066CC]-> domain : uses TS models
+services -[#009900]-> "/db" : SQL queries
+
+' Rust internal dependencies
+ffi -[#FF6600]-> ephemeris : delegates
+ffi -[#FF6600]-> coordinates : delegates
+ffi -[#FF6600]-> visibility : delegates
+ffi -[#FF6600]-> math : delegates
+ephemeris -[#FF6600]-> math : uses
+coordinates -[#FF6600]-> math : uses
+visibility -[#FF6600]-> ephemeris : uses
+visibility -[#FF6600]-> coordinates : uses
+validation -[#FF6600]..> ephemeris : validates
+validation -[#FF6600]..> coordinates : validates
+
+' Test dependencies
+"unit (Rust)" -[#CC0066]..> "/core (Rust)" : tests
+"integration" -[#CC0066]..> services : tests
+"integration" -[#CC0066]..> ffi : tests
+"validation" -[#CC0066]..> ephemeris : validates against\nknown data
+"e2e (Detox)" -[#CC0066]..> screens : tests
+
+' Scripts dependencies
+build_rust -[#888888]..> "/core (Rust)" : compiles
+build_android -[#888888]..> "/mobile (TypeScript)" : bundles
+build_ios -[#888888]..> "/mobile (TypeScript)" : bundles
+seed_db -[#888888]..> "/db" : populates
+
+' ============================================================
+' Legend
+' ============================================================
+
+legend right
+    |= Color |= Layer |
+    | <#BBDEFB> | Presentation + Application (TypeScript) |
+    | <#FFE0B2> | Domain (Rust) |
+    | <#C8E6C9> | Data (SQLite) |
+    | <#F8BBD0> | Tests |
+    | <#E1BEE7> | Documentation |
+    | <#CFD8DC> | Build Scripts |
+    ---
+    **Solid arrows**: Runtime dependencies
+    **Dashed arrows**: Development-time dependencies
+endlegend
+
+footer \nFindMyStar Package Diagram\nSee also: architecture-overview.md | component-diagram.puml\nLast Updated: February 2026
+
+@enduml

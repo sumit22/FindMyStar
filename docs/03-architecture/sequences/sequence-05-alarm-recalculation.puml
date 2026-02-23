@@ -1,0 +1,29 @@
+@startuml
+participant "BackgroundWorker" as Worker
+participant "SQLiteRepository" as DB
+participant "VisibilityService" as Visibility
+participant "AlarmScheduler" as Scheduler
+participant "OSNotificationService" as OS
+
+note over Worker
+Daily recalculation at midnight
+via WorkManager / background task
+end note
+
+Worker -> DB: getTrackedObjects()
+DB --> Worker: [object1, object2, ...]
+
+loop For each tracked object
+    Worker -> Visibility: computeNextVisible(object)
+    Visibility --> Worker: newVisibleTime
+    
+    Worker -> Scheduler: reschedule(object, newVisibleTime)
+    Scheduler -> OS: updateNotification(newVisibleTime)
+    OS --> Scheduler: updated
+end
+
+note over Worker
+All alarms now updated for new day
+end note
+
+@enduml

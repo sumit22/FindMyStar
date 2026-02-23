@@ -1,0 +1,28 @@
+@startuml
+actor User
+participant "AlarmScreen" as UI
+participant "VisibilityService" as Visibility
+participant "AlarmScheduler" as Scheduler
+participant "SQLiteRepository" as DB
+participant "OSNotificationService" as OS
+
+User -> UI: tap "Set Alert"
+UI -> Visibility: computeNextVisible(object)
+Visibility --> UI: nextVisibleTime
+
+UI -> Scheduler: schedule(object, nextVisibleTime)
+Scheduler -> DB: saveTrackedObject(object, time)
+DB --> Scheduler: saved
+
+Scheduler -> OS: scheduleLocalNotification(time)
+OS --> Scheduler: scheduled
+
+Scheduler --> UI: alarmSet
+UI --> User: "Alert set for tomorrow at 21:43"
+
+note over OS
+When scheduled time arrives:
+OS --> User: Notification
+end note
+
+@enduml

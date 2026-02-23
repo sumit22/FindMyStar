@@ -1,0 +1,21 @@
+@startuml
+participant "ARScreen" as Screen
+participant "TrackingService" as Tracking
+
+loop Continuous
+    Screen -> Tracking: computeDirection()
+    Tracking --> Screen: angle
+    
+    alt angle < 0.5°
+        Tracking --> Screen: TARGET_LOCKED
+        Screen --> User: 🔒 Green light + sound
+    else angle < 5°
+        Tracking --> Screen: FINE_ADJUSTMENT
+        Screen --> User: 🟡 Yellow arrow
+    else angle >= 5°
+        Tracking --> Screen: COARSE_GUIDANCE
+        Screen --> User: 🔴 Red arrow "Move camera"
+    end
+end
+
+@enduml

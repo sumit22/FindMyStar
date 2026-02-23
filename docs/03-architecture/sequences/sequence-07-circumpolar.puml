@@ -1,0 +1,26 @@
+@startuml
+participant "VisibilityService" as Visibility
+participant "RiseSetSolver" as Solver
+
+Visibility -> Solver: computeRiseSet(object)
+
+alt |cos(H0)| > 1 AND tan(lat)*tan(dec) < 0
+    Solver --> Visibility: neverVisible
+    note over Solver
+    Object is always below horizon
+    from this latitude
+    end note
+else |cos(H0)| > 1 AND tan(lat)*tan(dec) > 0
+    Solver --> Visibility: alwaysVisible
+    note over Solver
+    Object never sets
+    (Circumpolar)
+    end note
+else Normal Rise/Set
+    Solver --> Visibility: {riseTime, setTime}
+    note over Solver
+    Object rises and sets normally
+    end note
+end
+
+@enduml

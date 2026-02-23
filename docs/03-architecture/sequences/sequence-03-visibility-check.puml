@@ -1,0 +1,28 @@
+@startuml
+actor User
+participant "ObjectInfoScreen" as UI
+participant "VisibilityService" as Visibility
+participant "EphemerisEngine" as Ephemeris
+participant "CoordinateEngine" as Coord
+participant "RiseSetSolver" as Solver
+
+User -> UI: openObject(Saturn)
+UI -> Visibility: evaluateVisibility(object, location, time)
+
+Visibility -> Ephemeris: computeRA_DEC(object, time)
+Ephemeris --> Visibility: RA, Dec
+
+Visibility -> Coord: RA_DEC_to_AltAz(RA, Dec, lat, lon, time)
+Coord --> Visibility: Alt
+
+alt Alt > 10° AND SunAlt < -6°
+    Visibility -> UI: visibleNow
+    UI --> User: "Visible now at 38° altitude"
+else Object below horizon
+    Visibility -> Solver: computeNextRise(object)
+    Solver --> Visibility: nextRiseTime
+    Visibility -> UI: nextVisibleTime
+    UI --> User: "Rises at 21:43, reaches 45° altitude"
+end
+
+@enduml
