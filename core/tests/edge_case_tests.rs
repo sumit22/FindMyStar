@@ -18,7 +18,9 @@ use findmystar_core::ephemeris::moon::compute_moon_position;
 use findmystar_core::ephemeris::planets::{compute_planet_position, Planet};
 use findmystar_core::ephemeris::stars::compute_star_position;
 use findmystar_core::ephemeris::sun::compute_sun_position;
-use findmystar_core::math::utils::{deg_to_rad, normalize_degrees, rad_to_deg, safe_acos, safe_asin};
+use findmystar_core::math::utils::{
+    deg_to_rad, normalize_degrees, rad_to_deg, safe_acos, safe_asin,
+};
 use findmystar_core::math::vector3::Vector3;
 
 // ============================================================================
@@ -34,11 +36,17 @@ fn test_north_pole_latitude() {
 
     // High-dec star should be circumpolar
     let (alt, _az) = ra_dec_to_altaz(0.0, 80.0, lat, lon, unix_ms);
-    assert!(alt > 70.0, "Dec=80° star at pole should be high: alt={alt:.1}°");
+    assert!(
+        alt > 70.0,
+        "Dec=80° star at pole should be high: alt={alt:.1}°"
+    );
 
     // Negative-dec star should never rise
     let (alt_neg, _) = ra_dec_to_altaz(0.0, -20.0, lat, lon, unix_ms);
-    assert!(alt_neg < 0.0, "Dec=-20° star at pole should be below horizon: alt={alt_neg:.1}°");
+    assert!(
+        alt_neg < 0.0,
+        "Dec=-20° star at pole should be below horizon: alt={alt_neg:.1}°"
+    );
 }
 
 #[test]
@@ -49,7 +57,10 @@ fn test_south_pole_latitude() {
 
     // Negative-dec star should be circumpolar at south pole
     let (alt, _) = ra_dec_to_altaz(0.0, -80.0, lat, lon, unix_ms);
-    assert!(alt > 70.0, "Dec=-80° star at south pole should be high: alt={alt:.1}°");
+    assert!(
+        alt > 70.0,
+        "Dec=-80° star at south pole should be high: alt={alt:.1}°"
+    );
 }
 
 #[test]
@@ -281,8 +292,13 @@ fn test_sun_position_at_j2000_boundary() {
 #[test]
 fn test_all_planets_at_extremes() {
     let planets = [
-        Planet::Mercury, Planet::Venus, Planet::Mars, Planet::Jupiter,
-        Planet::Saturn, Planet::Uranus, Planet::Neptune,
+        Planet::Mercury,
+        Planet::Venus,
+        Planet::Mars,
+        Planet::Jupiter,
+        Planet::Saturn,
+        Planet::Uranus,
+        Planet::Neptune,
     ];
 
     for planet in &planets {

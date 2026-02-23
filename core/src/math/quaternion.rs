@@ -59,8 +59,7 @@ impl Quaternion {
     ///
     /// Corrects floating-point drift after repeated multiplications.
     pub fn normalize(&self) -> Quaternion {
-        let mag =
-            (self.w * self.w + self.x * self.x + self.y * self.y + self.z * self.z).sqrt();
+        let mag = (self.w * self.w + self.x * self.x + self.y * self.y + self.z * self.z).sqrt();
         if mag < 1e-15 {
             return Quaternion::identity();
         }
@@ -172,7 +171,10 @@ mod tests {
             + (q1q2.x - q2q1.x).abs()
             + (q1q2.y - q2q1.y).abs()
             + (q1q2.z - q2q1.z).abs();
-        assert!(diff > 0.01, "Quaternion multiplication should not be commutative");
+        assert!(
+            diff > 0.01,
+            "Quaternion multiplication should not be commutative"
+        );
     }
 
     #[test]

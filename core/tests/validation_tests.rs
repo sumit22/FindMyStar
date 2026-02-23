@@ -131,8 +131,8 @@ fn test_gmst_sidereal_day_rate() {
     // The difference should be close to the sidereal excess: ~0.06571 hours (3m 56.5s)
     let diff = ((gmst_1 - gmst_0) + 24.0).rem_euclid(24.0);
     let excess_seconds = (diff - 0.0) * 3600.0; // Full diff in seconds
-    // GMST advances by ~24.065710... hours per solar day
-    // So the wrapped diff should be ~0.06571 hours = 236.6 seconds
+                                                // GMST advances by ~24.065710... hours per solar day
+                                                // So the wrapped diff should be ~0.06571 hours = 236.6 seconds
     assert!(
         (excess_seconds - 236.6).abs() < 2.0,
         "Daily sidereal excess should be ~236.6s, got {excess_seconds:.1}s"
@@ -219,7 +219,13 @@ fn test_sun_positions_key_dates() {
         assert!(
             sep < r.tolerance_arcmin,
             "Sun at {}: got ({:.3}h, {:.2}°), expected ({:.3}h, {:.2}°), sep={:.1}' (tol={:.0}')",
-            r.label, ra, dec, r.expected_ra_h, r.expected_dec_d, sep, r.tolerance_arcmin
+            r.label,
+            ra,
+            dec,
+            r.expected_ra_h,
+            r.expected_dec_d,
+            sep,
+            r.tolerance_arcmin
         );
     }
 }
@@ -283,8 +289,13 @@ fn test_inner_planet_positions() {
 fn test_all_planets_valid_ra_dec_range() {
     // All planets should produce valid RA [0,24) and Dec [-90,90] at all times
     let planets = [
-        Planet::Mercury, Planet::Venus, Planet::Mars, Planet::Jupiter,
-        Planet::Saturn, Planet::Uranus, Planet::Neptune,
+        Planet::Mercury,
+        Planet::Venus,
+        Planet::Mars,
+        Planet::Jupiter,
+        Planet::Saturn,
+        Planet::Uranus,
+        Planet::Neptune,
     ];
     for planet in &planets {
         for day_offset in (0..3650).step_by(30) {
@@ -310,8 +321,13 @@ fn test_planet_declination_sanity() {
     // Note: our simplified Keplerian model can produce larger-than-reality
     // declinations for outer planets due to missing perturbation terms.
     let planets = [
-        Planet::Mercury, Planet::Venus, Planet::Mars, Planet::Jupiter,
-        Planet::Saturn, Planet::Uranus, Planet::Neptune,
+        Planet::Mercury,
+        Planet::Venus,
+        Planet::Mars,
+        Planet::Jupiter,
+        Planet::Saturn,
+        Planet::Uranus,
+        Planet::Neptune,
     ];
 
     for planet in &planets {
@@ -341,13 +357,48 @@ fn test_star_positions_at_j2000() {
     }
 
     let stars = [
-        StarRef { hip_id: 32349, name: "Sirius", ra_j2000_h: 6.7525, dec_j2000_d: -16.7161 },
-        StarRef { hip_id: 91262, name: "Vega", ra_j2000_h: 18.6156, dec_j2000_d: 38.7837 },
-        StarRef { hip_id: 69673, name: "Arcturus", ra_j2000_h: 14.2610, dec_j2000_d: 19.1824 },
-        StarRef { hip_id: 24436, name: "Rigel", ra_j2000_h: 5.2423, dec_j2000_d: -8.2017 },
-        StarRef { hip_id: 30438, name: "Canopus", ra_j2000_h: 6.3991, dec_j2000_d: -52.6957 },
-        StarRef { hip_id: 97649, name: "Altair", ra_j2000_h: 19.8464, dec_j2000_d: 8.8684 },
-        StarRef { hip_id: 21421, name: "Aldebaran", ra_j2000_h: 4.5987, dec_j2000_d: 16.5093 },
+        StarRef {
+            hip_id: 32349,
+            name: "Sirius",
+            ra_j2000_h: 6.7525,
+            dec_j2000_d: -16.7161,
+        },
+        StarRef {
+            hip_id: 91262,
+            name: "Vega",
+            ra_j2000_h: 18.6156,
+            dec_j2000_d: 38.7837,
+        },
+        StarRef {
+            hip_id: 69673,
+            name: "Arcturus",
+            ra_j2000_h: 14.2610,
+            dec_j2000_d: 19.1824,
+        },
+        StarRef {
+            hip_id: 24436,
+            name: "Rigel",
+            ra_j2000_h: 5.2423,
+            dec_j2000_d: -8.2017,
+        },
+        StarRef {
+            hip_id: 30438,
+            name: "Canopus",
+            ra_j2000_h: 6.3991,
+            dec_j2000_d: -52.6957,
+        },
+        StarRef {
+            hip_id: 97649,
+            name: "Altair",
+            ra_j2000_h: 19.8464,
+            dec_j2000_d: 8.8684,
+        },
+        StarRef {
+            hip_id: 21421,
+            name: "Aldebaran",
+            ra_j2000_h: 4.5987,
+            dec_j2000_d: 16.5093,
+        },
     ];
 
     for s in &stars {
@@ -357,7 +408,8 @@ fn test_star_positions_at_j2000() {
         assert!(
             sep < 0.1,
             "{}: sep={:.3}' at J2000 (should be ~0)",
-            s.name, sep
+            s.name,
+            sep
         );
     }
 }
@@ -374,14 +426,15 @@ fn test_star_positions_with_precession() {
     ];
 
     for (hip, name) in &stars {
-        let (ra_now, dec_now) = compute_star_position(*hip, jd_2025)
-            .unwrap_or_else(|| panic!("{} not found", name));
+        let (ra_now, dec_now) =
+            compute_star_position(*hip, jd_2025).unwrap_or_else(|| panic!("{} not found", name));
         let (ra_j2k, dec_j2k) = compute_star_position(*hip, JD_J2000).unwrap();
         let sep = angular_sep_arcmin(ra_now, dec_now, ra_j2k, dec_j2k);
         assert!(
             sep > 0.1 && sep < 30.0,
             "{}: precession drift over 25y = {:.1}' (expected 1-30')",
-            name, sep
+            name,
+            sep
         );
     }
 }
@@ -397,8 +450,14 @@ fn test_moon_ra_dec_ranges() {
     for day in 0..365 {
         let jd = JD_J2000 + day as f64;
         let (ra, dec) = compute_moon_position(jd);
-        assert!(ra >= 0.0 && ra < 24.0, "Moon RA {ra:.3}h out of range at day {day}");
-        assert!(dec.abs() < 30.0, "Moon Dec {dec:.2}° out of range at day {day}");
+        assert!(
+            ra >= 0.0 && ra < 24.0,
+            "Moon RA {ra:.3}h out of range at day {day}"
+        );
+        assert!(
+            dec.abs() < 30.0,
+            "Moon Dec {dec:.2}° out of range at day {day}"
+        );
     }
 }
 
@@ -493,14 +552,12 @@ fn test_sun_crosses_horizon() {
         let t1 = base_ms + (minute as f64) * 60_000.0;
         let t2 = t1 + 60_000.0;
 
-        let (sun_ra1, sun_dec1) = compute_sun_position(
-            findmystar_core::coordinates::time::unix_to_jd(t1),
-        );
+        let (sun_ra1, sun_dec1) =
+            compute_sun_position(findmystar_core::coordinates::time::unix_to_jd(t1));
         let (alt1, _) = ra_dec_to_altaz(sun_ra1, sun_dec1, lat, lon, t1);
 
-        let (sun_ra2, sun_dec2) = compute_sun_position(
-            findmystar_core::coordinates::time::unix_to_jd(t2),
-        );
+        let (sun_ra2, sun_dec2) =
+            compute_sun_position(findmystar_core::coordinates::time::unix_to_jd(t2));
         let (alt2, _) = ra_dec_to_altaz(sun_ra2, sun_dec2, lat, lon, t2);
 
         if alt1 < 0.0 && alt2 >= 0.0 {
@@ -508,7 +565,10 @@ fn test_sun_crosses_horizon() {
             break;
         }
     }
-    assert!(found_crossing, "Sun should cross horizon at NYC between 11:00-13:00 UTC on Jan 1 2024");
+    assert!(
+        found_crossing,
+        "Sun should cross horizon at NYC between 11:00-13:00 UTC on Jan 1 2024"
+    );
 }
 
 #[test]
@@ -522,12 +582,15 @@ fn test_sun_day_night_cycle() {
     let mut has_below = false;
     for hour in 0..24 {
         let t = base_ms + (hour as f64) * 3_600_000.0;
-        let (sun_ra, sun_dec) = compute_sun_position(
-            findmystar_core::coordinates::time::unix_to_jd(t),
-        );
+        let (sun_ra, sun_dec) =
+            compute_sun_position(findmystar_core::coordinates::time::unix_to_jd(t));
         let (alt, _) = ra_dec_to_altaz(sun_ra, sun_dec, lat, lon, t);
-        if alt > 5.0 { has_above = true; }
-        if alt < -5.0 { has_below = true; }
+        if alt > 5.0 {
+            has_above = true;
+        }
+        if alt < -5.0 {
+            has_below = true;
+        }
     }
     assert!(has_above, "Sun should be above horizon during the day");
     assert!(has_below, "Sun should be below horizon during the night");

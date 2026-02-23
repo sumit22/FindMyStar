@@ -11,8 +11,8 @@ pub fn compute_gmst(jd: f64) -> f64 {
     let t = d / 36_525.0;
 
     // GMST in degrees (IAU formula)
-    let gmst_deg = 280.460_618_37 + 360.985_647_366_29 * d + 0.000_387_933 * t * t
-        - t * t * t / 38_710_000.0;
+    let gmst_deg =
+        280.460_618_37 + 360.985_647_366_29 * d + 0.000_387_933 * t * t - t * t * t / 38_710_000.0;
 
     // Convert to hours and normalize
     normalize_hours(gmst_deg / 15.0)

@@ -37,10 +37,18 @@ const ERR_NOT_FOUND: i32 = -2;
 /// Computes altitude and azimuth for an equatorial position.
 #[no_mangle]
 pub extern "C" fn ffi_ra_dec_to_altaz(
-    ra_hours: f64, dec_deg: f64, lat_deg: f64, lon_deg: f64, unix_ms: f64,
+    ra_hours: f64,
+    dec_deg: f64,
+    lat_deg: f64,
+    lon_deg: f64,
+    unix_ms: f64,
 ) -> FfiAltAz {
     let (alt, az) = ra_dec_to_altaz(ra_hours, dec_deg, lat_deg, lon_deg, unix_ms);
-    FfiAltAz { altitude: alt, azimuth: az, error_code: OK }
+    FfiAltAz {
+        altitude: alt,
+        azimuth: az,
+        error_code: OK,
+    }
 }
 
 /// Computes the position of a celestial object.
@@ -49,8 +57,11 @@ pub extern "C" fn ffi_ra_dec_to_altaz(
 /// Returns RA in hours via out_ra, Dec in degrees via out_dec.
 #[no_mangle]
 pub extern "C" fn ffi_compute_position(
-    object_type: i32, object_id: u32, unix_ms: f64,
-    out_ra: *mut f64, out_dec: *mut f64,
+    object_type: i32,
+    object_id: u32,
+    unix_ms: f64,
+    out_ra: *mut f64,
+    out_dec: *mut f64,
 ) -> i32 {
     let obj = match object_type {
         0 => ObjectType::Sun,
@@ -63,8 +74,12 @@ pub extern "C" fn ffi_compute_position(
     let jd = crate::coordinates::time::unix_to_jd(unix_ms);
     match compute_position(obj, jd) {
         Some((ra, dec)) => unsafe {
-            if !out_ra.is_null() { *out_ra = ra; }
-            if !out_dec.is_null() { *out_dec = dec; }
+            if !out_ra.is_null() {
+                *out_ra = ra;
+            }
+            if !out_dec.is_null() {
+                *out_dec = dec;
+            }
             OK
         },
         None => ERR_NOT_FOUND,
@@ -74,43 +89,72 @@ pub extern "C" fn ffi_compute_position(
 /// Computes tracking direction from device quaternion to target vector.
 #[no_mangle]
 pub extern "C" fn ffi_compute_tracking(
-    target_x: f64, target_y: f64, target_z: f64,
-    qw: f64, qx: f64, qy: f64, qz: f64,
+    target_x: f64,
+    target_y: f64,
+    target_z: f64,
+    qw: f64,
+    qx: f64,
+    qy: f64,
+    qz: f64,
 ) -> FfiTrackingResult {
     let target = Vector3::new(target_x, target_y, target_z);
     let q_device = Quaternion::new(qw, qx, qy, qz);
     let (direction, distance) = compute_direction(&target, &q_device);
-    FfiTrackingResult { direction_deg: direction, distance_deg: distance, error_code: OK }
+    FfiTrackingResult {
+        direction_deg: direction,
+        distance_deg: distance,
+        error_code: OK,
+    }
 }
 
 /// Computes rise/set times for a fixed-coordinate object (star/deep-sky).
 #[no_mangle]
 pub extern "C" fn ffi_compute_rise_set(
-    ra_hours: f64, dec_deg: f64, lat_deg: f64, lon_deg: f64, start_unix_ms: f64,
+    ra_hours: f64,
+    dec_deg: f64,
+    lat_deg: f64,
+    lon_deg: f64,
+    start_unix_ms: f64,
 ) -> FfiRiseSetResult {
     match compute_rise_set_analytical(ra_hours, dec_deg, lat_deg, lon_deg, start_unix_ms, None) {
-        RiseSetResult::RisesAndSets { rise_ms, set_ms } => {
-            FfiRiseSetResult { rise_ms, set_ms, status: 0 }
-        }
-        RiseSetResult::AlwaysVisible => {
-            FfiRiseSetResult { rise_ms: 0.0, set_ms: 0.0, status: 1 }
-        }
-        RiseSetResult::NeverVisible => {
-            FfiRiseSetResult { rise_ms: 0.0, set_ms: 0.0, status: 2 }
-        }
+        RiseSetResult::RisesAndSets { rise_ms, set_ms } => FfiRiseSetResult {
+            rise_ms,
+            set_ms,
+            status: 0,
+        },
+        RiseSetResult::AlwaysVisible => FfiRiseSetResult {
+            rise_ms: 0.0,
+            set_ms: 0.0,
+            status: 1,
+        },
+        RiseSetResult::NeverVisible => FfiRiseSetResult {
+            rise_ms: 0.0,
+            set_ms: 0.0,
+            status: 2,
+        },
     }
 }
 
 /// Converts altitude/azimuth to a unit vector in East-Up-North frame.
 #[no_mangle]
 pub extern "C" fn ffi_altaz_to_vector3(
-    alt_deg: f64, az_deg: f64, out_x: *mut f64, out_y: *mut f64, out_z: *mut f64,
+    alt_deg: f64,
+    az_deg: f64,
+    out_x: *mut f64,
+    out_y: *mut f64,
+    out_z: *mut f64,
 ) -> i32 {
     let v = altaz_to_vector3(alt_deg, az_deg);
     unsafe {
-        if !out_x.is_null() { *out_x = v.x; }
-        if !out_y.is_null() { *out_y = v.y; }
-        if !out_z.is_null() { *out_z = v.z; }
+        if !out_x.is_null() {
+            *out_x = v.x;
+        }
+        if !out_y.is_null() {
+            *out_y = v.y;
+        }
+        if !out_z.is_null() {
+            *out_z = v.z;
+        }
     }
     OK
 }
@@ -118,7 +162,12 @@ pub extern "C" fn ffi_altaz_to_vector3(
 /// Returns the angular distance in degrees between two unit vectors.
 #[no_mangle]
 pub extern "C" fn ffi_angular_distance(
-    x1: f64, y1: f64, z1: f64, x2: f64, y2: f64, z2: f64,
+    x1: f64,
+    y1: f64,
+    z1: f64,
+    x2: f64,
+    y2: f64,
+    z2: f64,
 ) -> f64 {
     let v1 = Vector3::new(x1, y1, z1);
     let v2 = Vector3::new(x2, y2, z2);

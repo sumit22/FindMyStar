@@ -1,7 +1,7 @@
-pub mod sun;
 pub mod moon;
 pub mod planets;
 pub mod stars;
+pub mod sun;
 
 use planets::Planet;
 
@@ -10,8 +10,8 @@ use planets::Planet;
 pub enum ObjectType {
     Sun,
     Moon,
-    Planet(u32),  // planet_id 1-7
-    Star(u32),    // hip_id
+    Planet(u32), // planet_id 1-7
+    Star(u32),   // hip_id
 }
 
 /// Computes the position (RA hours, Dec degrees) for any celestial object.

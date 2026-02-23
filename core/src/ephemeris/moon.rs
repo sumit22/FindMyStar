@@ -23,8 +23,7 @@ pub fn compute_moon_position(jd: f64) -> (f64, f64) {
     let f_rad = deg_to_rad(f);
 
     // Ecliptic longitude correction (degrees)
-    let dl = 6.289 * m_prime_rad.sin()
-        - 1.274 * (2.0 * d_rad - m_prime_rad).sin()
+    let dl = 6.289 * m_prime_rad.sin() - 1.274 * (2.0 * d_rad - m_prime_rad).sin()
         + 0.658 * (2.0 * d_rad).sin()
         + 0.214 * (2.0 * m_prime_rad).sin()
         - 0.186 * m_rad.sin()
@@ -43,9 +42,9 @@ pub fn compute_moon_position(jd: f64) -> (f64, f64) {
     let epsilon = deg_to_rad(23.439291 - 0.013004 * t);
 
     // Ecliptic to equatorial
-    let ra_rad = (lambda.sin() * epsilon.cos() - b_rad.tan() * epsilon.sin())
-        .atan2(lambda.cos());
-    let dec_rad = safe_asin(b_rad.sin() * epsilon.cos() + b_rad.cos() * epsilon.sin() * lambda.sin());
+    let ra_rad = (lambda.sin() * epsilon.cos() - b_rad.tan() * epsilon.sin()).atan2(lambda.cos());
+    let dec_rad =
+        safe_asin(b_rad.sin() * epsilon.cos() + b_rad.cos() * epsilon.sin() * lambda.sin());
 
     let ra_hours = normalize_hours(rad_to_deg(ra_rad) / 15.0);
     let dec_degrees = rad_to_deg(dec_rad);

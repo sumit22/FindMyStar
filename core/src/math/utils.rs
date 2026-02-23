@@ -62,10 +62,7 @@ pub fn angular_distance(v1: &super::Vector3, v2: &super::Vector3) -> f64 {
 ///
 /// Returns (direction_angle_deg, angular_distance_deg) where direction
 /// is 0=up, 90=right, 180=down, 270=left on the AR screen.
-pub fn compute_direction(
-    v_target: &super::Vector3,
-    q_device: &super::Quaternion,
-) -> (f64, f64) {
+pub fn compute_direction(v_target: &super::Vector3, q_device: &super::Quaternion) -> (f64, f64) {
     // Transform target into device's local frame
     let q_inv = q_device.conjugate();
     let v_rel = q_inv.rotate_vector(v_target);
@@ -216,7 +213,10 @@ mod tests {
         let target = Vector3::new(0.0, 0.0, -1.0).normalize();
         let device = Quaternion::identity();
         let (_, distance) = compute_direction(&target, &device);
-        assert!(distance < 1.0, "Distance should be near zero when pointing at target");
+        assert!(
+            distance < 1.0,
+            "Distance should be near zero when pointing at target"
+        );
     }
 
     #[test]

@@ -8,14 +8,14 @@
 //! - Single-object computations: < 10ms
 //! - Batch 100 objects: < 100ms
 
-use std::time::Instant;
-use findmystar_core::coordinates::transforms::{ra_dec_to_altaz, altaz_to_vector3};
-use findmystar_core::ephemeris::sun::compute_sun_position;
+use findmystar_core::coordinates::transforms::{altaz_to_vector3, ra_dec_to_altaz};
 use findmystar_core::ephemeris::moon::compute_moon_position;
 use findmystar_core::ephemeris::planets::{compute_planet_position, Planet};
 use findmystar_core::ephemeris::stars::compute_star_position;
-use findmystar_core::visibility::rise_set::compute_rise_iterative;
+use findmystar_core::ephemeris::sun::compute_sun_position;
 use findmystar_core::math::utils::angular_distance;
+use findmystar_core::visibility::rise_set::compute_rise_iterative;
+use std::time::Instant;
 
 const JD_J2000: f64 = 2_451_545.0;
 const ITERATIONS: u32 = 10_000;
@@ -25,15 +25,21 @@ const LON: f64 = -74.006;
 
 fn bench<F: Fn()>(name: &str, iterations: u32, f: F) -> f64 {
     // Warmup
-    for _ in 0..100 { f(); }
+    for _ in 0..100 {
+        f();
+    }
 
     let start = Instant::now();
-    for _ in 0..iterations { f(); }
+    for _ in 0..iterations {
+        f();
+    }
     let elapsed = start.elapsed();
     let per_call_ns = elapsed.as_nanos() as f64 / iterations as f64;
     let per_call_us = per_call_ns / 1000.0;
-    eprintln!("  {name}: {per_call_us:.2} µs/call ({iterations} iterations, {:.1}ms total)",
-        elapsed.as_secs_f64() * 1000.0);
+    eprintln!(
+        "  {name}: {per_call_us:.2} µs/call ({iterations} iterations, {:.1}ms total)",
+        elapsed.as_secs_f64() * 1000.0
+    );
     per_call_us
 }
 
@@ -48,7 +54,10 @@ fn bench_ra_dec_to_altaz() {
         let _ = ra_dec_to_altaz(6.7525, -16.7161, LAT, LON, UNIX_MS);
     });
     // NFR: single computation < 10ms (10,000 µs)
-    assert!(us < 10_000.0, "ra_dec_to_altaz too slow: {us:.0}µs (limit: 10,000µs)");
+    assert!(
+        us < 10_000.0,
+        "ra_dec_to_altaz too slow: {us:.0}µs (limit: 10,000µs)"
+    );
 }
 
 #[test]
@@ -96,13 +105,17 @@ fn bench_planet_rise_set() {
                 let jd = findmystar_core::coordinates::time::unix_to_jd(t);
                 compute_planet_position(Planet::Mars, jd)
             },
-            LAT, LON,
+            LAT,
+            LON,
             UNIX_MS,
             0.0,
         );
     });
     // Rise/set iterative is more expensive (scans 48h in 5-min steps)
-    assert!(us < 10_000_000.0, "Planet rise/set too slow: {us:.0}µs (limit: 10s)");
+    assert!(
+        us < 10_000_000.0,
+        "Planet rise/set too slow: {us:.0}µs (limit: 10s)"
+    );
 }
 
 #[test]
@@ -129,10 +142,9 @@ fn bench_batch_100_objects() {
 
     // Build a list of 100 objects: Sun + Moon + 7 planets + 39 stars + 52 repeated stars
     let star_hips: Vec<u32> = vec![
-        677, 1067, 2081, 3179, 3419, 5447, 7588, 9884, 11767, 13847,
-        14576, 15863, 21421, 24436, 24608, 25336, 25930, 26311, 27989, 30438,
-        32349, 33579, 36850, 37279, 49669, 54061, 57632, 65474, 67301, 69673,
-        71683, 80763, 86032, 91262, 97649, 102098, 107315, 109268, 113368,
+        677, 1067, 2081, 3179, 3419, 5447, 7588, 9884, 11767, 13847, 14576, 15863, 21421, 24436,
+        24608, 25336, 25930, 26311, 27989, 30438, 32349, 33579, 36850, 37279, 49669, 54061, 57632,
+        65474, 67301, 69673, 71683, 80763, 86032, 91262, 97649, 102098, 107315, 109268, 113368,
     ];
     let jd = JD_J2000 + 9000.0;
 
@@ -167,8 +179,10 @@ fn bench_batch_100_objects() {
     let per_batch_us = elapsed.as_micros() as f64 / iterations as f64;
     let per_batch_ms = per_batch_us / 1000.0;
 
-    eprintln!("  batch_100_objects: {per_batch_ms:.2} ms/batch ({iterations} iterations, {:.1}ms total)",
-        elapsed.as_secs_f64() * 1000.0);
+    eprintln!(
+        "  batch_100_objects: {per_batch_ms:.2} ms/batch ({iterations} iterations, {:.1}ms total)",
+        elapsed.as_secs_f64() * 1000.0
+    );
 
     // NFR: batch 100 objects < 100ms
     assert!(

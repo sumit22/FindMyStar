@@ -1,5 +1,5 @@
-use crate::coordinates::transforms::ra_dec_to_altaz;
 use crate::coordinates::time::unix_to_jd;
+use crate::coordinates::transforms::ra_dec_to_altaz;
 use crate::math::utils::deg_to_rad;
 
 /// Result of a rise/set calculation.
@@ -41,8 +41,7 @@ pub fn compute_rise_set_analytical(
     let dec_rad = deg_to_rad(dec_deg);
     let h0_rad = deg_to_rad(h0);
 
-    let cos_h0 = (h0_rad.sin() - lat_rad.sin() * dec_rad.sin())
-        / (lat_rad.cos() * dec_rad.cos());
+    let cos_h0 = (h0_rad.sin() - lat_rad.sin() * dec_rad.sin()) / (lat_rad.cos() * dec_rad.cos());
 
     if cos_h0 < -1.0 {
         return RiseSetResult::AlwaysVisible;
@@ -107,8 +106,12 @@ pub fn compute_rise_iterative(
         if prev_below && alt >= altitude_threshold {
             // Object just rose - refine with binary search
             return Some(binary_search_rise(
-                &compute_position, lat_deg, lon_deg,
-                t - step_ms, t, altitude_threshold,
+                &compute_position,
+                lat_deg,
+                lon_deg,
+                t - step_ms,
+                t,
+                altitude_threshold,
             ));
         }
 
@@ -128,11 +131,17 @@ fn binary_search_rise(
     threshold: f64,
 ) -> f64 {
     for _ in 0..20 {
-        if (t2 - t1) < 60_000.0 { break; } // 1 minute precision
+        if (t2 - t1) < 60_000.0 {
+            break;
+        } // 1 minute precision
         let mid = (t1 + t2) / 2.0;
         let (ra, dec) = compute_position(mid);
         let (alt, _) = ra_dec_to_altaz(ra, dec, lat_deg, lon_deg, mid);
-        if alt >= threshold { t2 = mid; } else { t1 = mid; }
+        if alt >= threshold {
+            t2 = mid;
+        } else {
+            t1 = mid;
+        }
     }
     (t1 + t2) / 2.0
 }
@@ -144,21 +153,24 @@ mod tests {
     #[test]
     fn test_polaris_circumpolar_at_high_lat() {
         // Polaris (Dec ~89.26) should be circumpolar at lat > 1°
-        let result = compute_rise_set_analytical(2.53, 89.26, 45.0, -74.0, 1_704_067_200_000.0, None);
+        let result =
+            compute_rise_set_analytical(2.53, 89.26, 45.0, -74.0, 1_704_067_200_000.0, None);
         assert_eq!(result, RiseSetResult::AlwaysVisible);
     }
 
     #[test]
     fn test_canopus_never_visible_from_nyc() {
         // Canopus (Dec ~-52.7) should never be visible from NYC (lat ~40.7)
-        let result = compute_rise_set_analytical(6.40, -52.7, 40.7, -74.0, 1_704_067_200_000.0, None);
+        let result =
+            compute_rise_set_analytical(6.40, -52.7, 40.7, -74.0, 1_704_067_200_000.0, None);
         assert_eq!(result, RiseSetResult::NeverVisible);
     }
 
     #[test]
     fn test_sirius_rises_and_sets() {
         // Sirius (Dec ~-16.7) should rise and set from most mid-latitudes
-        let result = compute_rise_set_analytical(6.75, -16.72, 40.7, -74.0, 1_704_067_200_000.0, None);
+        let result =
+            compute_rise_set_analytical(6.75, -16.72, 40.7, -74.0, 1_704_067_200_000.0, None);
         match result {
             RiseSetResult::RisesAndSets { rise_ms, set_ms } => {
                 assert!(rise_ms > 0.0);
@@ -173,10 +185,14 @@ mod tests {
         // Use a simple fixed-position function (like a star)
         let result = compute_rise_iterative(
             |_t| (6.75, -16.72), // Sirius-like
-            40.7, -74.0,
+            40.7,
+            -74.0,
             1_704_067_200_000.0, // 2024-01-01
-            0.0, // horizon
+            0.0,                 // horizon
         );
-        assert!(result.is_some(), "Should find a rise time for Sirius-like object");
+        assert!(
+            result.is_some(),
+            "Should find a rise time for Sirius-like object"
+        );
     }
 }

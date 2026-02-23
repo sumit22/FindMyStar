@@ -1,11 +1,11 @@
 /// Twilight classification based on Sun altitude.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TwilightState {
-    Day,                 // Sun above horizon
-    CivilTwilight,       // Sun 0° to -6°
-    NauticalTwilight,    // Sun -6° to -12°
-    AstronomicalTwilight,// Sun -12° to -18°
-    Night,               // Sun below -18°
+    Day,                  // Sun above horizon
+    CivilTwilight,        // Sun 0° to -6°
+    NauticalTwilight,     // Sun -6° to -12°
+    AstronomicalTwilight, // Sun -12° to -18°
+    Night,                // Sun below -18°
 }
 
 /// Classifies the twilight state based on Sun altitude in degrees.
@@ -63,7 +63,10 @@ mod tests {
 
     #[test]
     fn test_classify_astronomical() {
-        assert_eq!(classify_twilight(-15.0), TwilightState::AstronomicalTwilight);
+        assert_eq!(
+            classify_twilight(-15.0),
+            TwilightState::AstronomicalTwilight
+        );
     }
 
     #[test]

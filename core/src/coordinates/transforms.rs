@@ -59,7 +59,7 @@ pub fn altaz_to_vector3(alt_deg: f64, az_deg: f64) -> Vector3 {
 
     Vector3::new(
         alt_rad.cos() * az_rad.sin(), // East (X)
-        alt_rad.sin(),                 // Up (Y)
+        alt_rad.sin(),                // Up (Y)
         alt_rad.cos() * az_rad.cos(), // North (Z)
     )
 }
