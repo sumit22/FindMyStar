@@ -8,6 +8,7 @@
 
 import * as Core from '../native/FindMyStarCore';
 import * as SensorFusion from './SensorFusionService';
+import * as SensorBindings from './SensorBindings';
 import * as LocationService from './LocationService';
 import { CelestialObject } from '../data/CatalogRepository';
 
@@ -17,6 +18,8 @@ export interface TrackingFrame {
   direction: Core.Vector3; // Direction vector toward target
   angularDistance: number; // Degrees from device pointing to target
   isLocked: boolean; // True if locked on target
+  deviceHeading: number; // Device compass heading (degrees, 0=N, 90=E)
+  deviceElevation: number; // Device tilt above horizon (degrees, 0=level, 90=straight up)
 }
 
 type TrackingCallback = (frame: TrackingFrame) => void;
@@ -40,6 +43,9 @@ let listeners: TrackingCallback[] = [];
 // Lock state
 let isLocked = false;
 let belowThresholdSince = 0;
+
+// Debug frame counter (exposed via debug overlay)
+let debugFrameCount = 0;
 
 function setupTarget(obj: CelestialObject): void {
   if (obj.type === 'sun' || obj.type === 'moon' || obj.planetId != null) {
@@ -115,16 +121,34 @@ async function trackingLoop(): Promise<void> {
           now,
         );
 
-    // Get device orientation as a direction vector from the quaternion
+    // Get device orientation from sensor fusion quaternion.
     const q = SensorFusion.getOrientation();
-    // Extract forward direction (0,0,1) rotated by quaternion: Q * [0,0,1] * Q*
+
+    // Extract device heading from quaternion.
+    // The ZYX yaw gives the heading of the phone's X axis (right side).
+    // When held upright, the forward direction (-Z) is 90° CCW from X,
+    // so we convert: heading = 270 - yawDeg (mod 360).
+    const yawRad = Math.atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y * q.y + q.z * q.z));
+    const deviceHeading = (270 - (yawRad * 180) / Math.PI + 360) % 360;
+
+    // Device elevation: how high above the horizon the back camera points.
+    // The -Z body axis vertical component (Up in sensor ENU frame) gives elevation.
+    const upComponent = 2 * (q.x * q.x + q.y * q.y) - 1;
+    const clampedUp = Math.max(-1, Math.min(1, upComponent));
+    const deviceElevation = Math.asin(clampedUp) * (180 / Math.PI);
+
+    // Build device direction in EUN frame (East-Up-North) to match the Rust core.
+    // Uses the same alt/az → vector3 conversion as the core engine, ensuring
+    // both deviceDir and tracking.direction are in the same coordinate frame.
+    const headRad = (deviceHeading * Math.PI) / 180;
+    const elevRad = (deviceElevation * Math.PI) / 180;
     const deviceDir: Core.Vector3 = {
-      x: 2 * (q.x * q.z + q.w * q.y),
-      y: 2 * (q.y * q.z - q.w * q.x),
-      z: 1 - 2 * (q.x * q.x + q.y * q.y),
+      x: Math.cos(elevRad) * Math.sin(headRad), // East
+      y: Math.sin(elevRad), // Up
+      z: Math.cos(elevRad) * Math.cos(headRad), // North
     };
 
-    // Compute angular distance between device pointing direction and target
+    // Compute angular distance — both vectors now in EUN frame
     const angularDist = await Core.angularDistance(deviceDir, tracking.direction);
 
     const locked = updateLockState(angularDist, now);
@@ -135,7 +159,11 @@ async function trackingLoop(): Promise<void> {
       direction: tracking.direction,
       angularDistance: angularDist,
       isLocked: locked,
+      deviceHeading,
+      deviceElevation,
     };
+
+    debugFrameCount++;
 
     for (const cb of listeners) {
       cb(frame);
@@ -166,12 +194,14 @@ export async function initialize(obj: CelestialObject): Promise<void> {
   // Start periodic location updates (every 60s)
   locationUpdateTimer = setInterval(updateLocation, 60000);
 
-  // Start sensor fusion
+  // Start hardware sensor subscriptions then fusion filter
+  SensorBindings.start();
   SensorFusion.start();
 
   // Reset lock state
   isLocked = false;
   belowThresholdSince = 0;
+  debugFrameCount = 0;
 
   active = true;
   trackingFrameId = requestAnimationFrame(() => {
@@ -196,6 +226,7 @@ export function stop(): void {
   }
 
   SensorFusion.stop();
+  SensorBindings.stop();
   targetObject = null;
   targetEngineParams = null;
   targetRaDec = null;
@@ -224,4 +255,20 @@ export function getTargetObject(): CelestialObject | null {
 
 export function isTargetLocked(): boolean {
   return isLocked;
+}
+
+export function getDebugInfo(): {
+  frameCount: number;
+  cachedLat: number;
+  cachedLon: number;
+  engineParams: typeof targetEngineParams;
+  raDec: typeof targetRaDec;
+} {
+  return {
+    frameCount: debugFrameCount,
+    cachedLat,
+    cachedLon,
+    engineParams: targetEngineParams,
+    raDec: targetRaDec,
+  };
 }

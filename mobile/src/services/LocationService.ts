@@ -44,20 +44,32 @@ export async function requestPermission(): Promise<boolean> {
 
 export function getCurrentLocation(): Promise<Location> {
   return new Promise((resolve, reject) => {
+    // Try high accuracy (GPS) first, fall back to network (cell/WiFi)
     Geolocation.getCurrentPosition(
       pos => {
         const loc = toLocation(pos);
         lastKnown = loc;
         resolve(loc);
       },
-      err => {
-        if (lastKnown) {
-          resolve(lastKnown);
-        } else {
-          reject(new Error(`Location unavailable: ${err.message}`));
-        }
+      () => {
+        // GPS timed out — retry with network location (works indoors)
+        Geolocation.getCurrentPosition(
+          pos => {
+            const loc = toLocation(pos);
+            lastKnown = loc;
+            resolve(loc);
+          },
+          err => {
+            if (lastKnown) {
+              resolve(lastKnown);
+            } else {
+              reject(new Error(`Location unavailable: ${err.message}`));
+            }
+          },
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 },
+        );
       },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 },
     );
   });
 }

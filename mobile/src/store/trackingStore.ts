@@ -23,6 +23,8 @@ interface ARState {
   azimuth: number;
   angularDistance: number;
   isLocked: boolean;
+  deviceHeading: number;
+  deviceElevation: number;
 }
 
 interface TrackingState {
@@ -144,6 +146,8 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
             azimuth: frame.azimuth,
             angularDistance: frame.angularDistance,
             isLocked: frame.isLocked,
+            deviceHeading: frame.deviceHeading,
+            deviceElevation: frame.deviceElevation,
           },
         });
       });
