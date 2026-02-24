@@ -7,6 +7,7 @@ import { ThemeProvider, useTheme } from './theme/ThemeContext';
 import { PurchaseProvider } from './purchase/PurchaseProvider';
 import { usePreferencesStore } from './store/preferencesStore';
 import * as BackgroundTask from './services/BackgroundTask';
+import * as LocationService from './services/LocationService';
 import RootNavigator from './navigation/RootNavigator';
 import type { RootStackParamList } from './navigation/types';
 
@@ -56,6 +57,7 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     loadPreferences();
+    LocationService.requestPermission();
     BackgroundTask.initialize();
     return () => BackgroundTask.teardown();
   }, [loadPreferences]);
