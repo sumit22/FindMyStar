@@ -60,6 +60,16 @@ jobs:
           mkdir -p mobile/android/app/src/main/assets
           cp db/findmystar.db mobile/android/app/src/main/assets/findmystar.db
 
+      - name: Bundle JS for offline use
+        working-directory: mobile
+        run: |
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
+
       - name: Build Android debug APK
         working-directory: mobile/android
         run: |

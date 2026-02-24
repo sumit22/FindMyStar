@@ -87,9 +87,11 @@ jobs:
         working-directory: mobile
         run: npm ci --legacy-peer-deps
 
-      - uses: nttld/setup-ndk@v1
+      - name: Set up Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
         with:
-          ndk-version: r25c
+          ndk-version: r27c
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -110,7 +112,13 @@ jobs:
         working-directory: core
         run: cargo build --target aarch64-linux-android --release
         env:
-          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang
+          CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
+
+      - name: Copy native library to jniLibs
+        run: |
+          mkdir -p mobile/android/app/src/main/jniLibs/arm64-v8a
+          cp core/target/aarch64-linux-android/release/libfindmystar_core.so \
+             mobile/android/app/src/main/jniLibs/arm64-v8a/
 
       - name: Build catalog database
         run: |
