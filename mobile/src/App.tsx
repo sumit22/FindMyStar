@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { NavigationContainerRef } from '@react-navigation/native';
 import { ThemeProvider, useTheme } from './theme/ThemeContext';
+import { PurchaseProvider } from './purchase/PurchaseProvider';
 import { usePreferencesStore } from './store/preferencesStore';
 import * as BackgroundTask from './services/BackgroundTask';
 import RootNavigator from './navigation/RootNavigator';
@@ -62,7 +63,9 @@ export default function App(): React.JSX.Element {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <AppContent />
+        <PurchaseProvider>
+          <AppContent />
+        </PurchaseProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

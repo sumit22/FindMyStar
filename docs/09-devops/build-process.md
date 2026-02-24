@@ -127,10 +127,10 @@ cargo build --release --target armv7-linux-androideabi
 
 | Target | Output Path | Library Name |
 |--------|------------|--------------|
-| macOS (host) | `target/release/` | `libastronomy_engine.dylib` |
-| Linux (host) | `target/release/` | `libastronomy_engine.so` |
-| iOS (static) | `target/aarch64-apple-ios/release/` | `libastronomy_engine.a` |
-| Android (shared) | `target/aarch64-linux-android/release/` | `libastronomy_engine.so` |
+| macOS (host) | `target/release/` | `libfindmystar_core.dylib` |
+| Linux (host) | `target/release/` | `libfindmystar_core.so` |
+| iOS (static) | `target/aarch64-apple-ios/release/` | `libfindmystar_core.a` |
+| Android (shared) | `target/aarch64-linux-android/release/` | `libfindmystar_core.so` |
 
 ### 3.4 Lint and Format Checks
 
@@ -277,33 +277,48 @@ For development builds, enable **Automatically manage signing** in Xcode under *
 
 ## 7. Database Setup
 
-### 7.1 Initialize the SQLite Database
+### 7.1 Build the Catalog Database
 
-The app ships with a pre-populated celestial object catalog stored in SQLite:
+The app ships with a pre-populated celestial object catalog stored in SQLite. The
+database is built from SQL source files using a shell script:
 
 ```bash
-# Create the database from schema
-sqlite3 mobile/assets/findmystar.db < db/schema.sql
-
-# Populate with star catalog data (Hipparcos, Messier, planets)
-python scripts/populate_catalog.py
+# Build the catalog database from schema + seed files
+bash scripts/build-catalog.sh db/findmystar.db
 
 # Verify the database
-sqlite3 mobile/assets/findmystar.db "SELECT COUNT(*) FROM objects;"
-# Expected: ~9100+ objects (stars, planets, deep sky)
+sqlite3 db/findmystar.db "SELECT COUNT(*) FROM objects;"
+# Expected: 151 objects (stars, planets, sun, moon, deep sky)
 ```
 
-### 7.2 Database Debugging
+### 7.2 Copy to Platform Assets
+
+After building, copy the database to the platform-specific asset directories:
+
+```bash
+# Android
+mkdir -p mobile/android/app/src/main/assets
+cp db/findmystar.db mobile/android/app/src/main/assets/findmystar.db
+
+# iOS
+mkdir -p mobile/ios/FindMyStar/www
+cp db/findmystar.db mobile/ios/FindMyStar/www/findmystar.db
+```
+
+These copies are `.gitignore`d since the database is a build artifact.
+
+### 7.3 Database Debugging
 
 ```bash
 # Open interactive SQLite shell
-sqlite3 mobile/assets/findmystar.db
+sqlite3 db/findmystar.db
 
 # Useful queries
 .tables                                    -- List all tables
 .schema objects                            -- Show objects table schema
 SELECT * FROM objects WHERE name LIKE '%Sirius%';
 SELECT * FROM tracked_objects;
+SELECT type, COUNT(*) FROM objects GROUP BY type;
 ```
 
 ---

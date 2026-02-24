@@ -112,6 +112,12 @@ jobs:
         env:
           CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ env.ANDROID_NDK_HOME }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android21-clang
 
+      - name: Build catalog database
+        run: |
+          bash scripts/build-catalog.sh db/findmystar.db
+          mkdir -p mobile/android/app/src/main/assets
+          cp db/findmystar.db mobile/android/app/src/main/assets/findmystar.db
+
       - name: Build Android AAB (Release)
         working-directory: mobile/android
         run: ./gradlew bundleRelease --no-daemon
@@ -163,6 +169,12 @@ jobs:
       - name: Build Rust core for iOS (arm64)
         working-directory: core
         run: cargo build --target aarch64-apple-ios --release
+
+      - name: Build catalog database
+        run: |
+          bash scripts/build-catalog.sh db/findmystar.db
+          mkdir -p mobile/ios/FindMyStar/www
+          cp db/findmystar.db mobile/ios/FindMyStar/www/findmystar.db
 
       - name: Install CocoaPods
         working-directory: mobile/ios

@@ -10,8 +10,13 @@
 /mobile/ios/build/
 /mobile/android/.gradle/
 /mobile/android/app/build/
+/mobile/android/app/.cxx/
 /mobile/android/build/
 /mobile/android/app/src/main/jniLibs/
+/mobile/android/app/src/main/assets/findmystar.db
+/mobile/android/local.properties
+/mobile/android/keystore.properties
+/mobile/android/app/release.keystore
 *.hprof
 
 # Build artifacts
@@ -21,9 +26,10 @@
 *.dSYM.zip
 *.dSYM
 
-# IDE
+# IDE & tools
 .idea/
 .vscode/
+.claude/settings.local.json
 *.swp
 *.swo
 *~
@@ -31,6 +37,10 @@
 # OS
 .DS_Store
 Thumbs.db
+
+# Local scripts and screenshots
+setup-sdk.bat
+emulator-screenshot.png
 
 # Environment
 .env
@@ -40,6 +50,7 @@ Thumbs.db
 # Database (built artifact, not source)
 /db/findmystar.db
 /mobile/assets/findmystar.db
+/mobile/ios/FindMyStar/www/findmystar.db
 
 # Coverage
 /core/tarpaulin-report.html

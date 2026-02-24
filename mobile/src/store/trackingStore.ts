@@ -89,6 +89,7 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       await get().loadAlarms();
     } catch (e) {
       set({ error: e instanceof Error ? e.message : 'Failed to create alarm' });
+      throw e;
     }
   },
 

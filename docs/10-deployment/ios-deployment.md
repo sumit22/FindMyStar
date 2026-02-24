@@ -16,7 +16,7 @@
 
 ### 1.2 Rust Static Library Integration
 
-The Rust domain engine compiles to `libastronomy_engine.a`. A custom Xcode Build Phase
+The Rust domain engine compiles to `libfindmystar_core.a`. A custom Xcode Build Phase
 script handles compilation:
 
 ```bash
@@ -28,7 +28,7 @@ else
     RUST_TARGET="aarch64-apple-ios"
 fi
 cargo build --release --target "$RUST_TARGET"
-cp "target/${RUST_TARGET}/release/libastronomy_engine.a" "${BUILT_PRODUCTS_DIR}/"
+cp "target/${RUST_TARGET}/release/libfindmystar_core.a" "${BUILT_PRODUCTS_DIR}/"
 ```
 
 Required Rust targets:
@@ -39,12 +39,31 @@ rustup target add aarch64-apple-ios-sim      # Simulator (Apple Silicon)
 rustup target add x86_64-apple-ios           # Simulator (Intel)
 ```
 
-### 1.3 Bitcode
+### 1.3 Bridging Header
+
+`FindMyStar-Bridging-Header.h` declares all C FFI structs (`FfiAltAz`,
+`FfiObjectTrackingResult`, `FfiRiseSetResult`, `FfiTrackingResult`) and functions
+exported by the Rust library. This header must match `core/src/ffi/exports.rs` exactly.
+See [api-contracts.md](../06-application-layer/api-contracts.md) for the full list.
+
+### 1.4 Catalog Database Bundling
+
+The SQLite catalog database must be present at `mobile/ios/FindMyStar/www/findmystar.db`
+before building. This directory is used by `react-native-sqlite-storage` with
+`createFromLocation: '~findmystar.db'`. Build locally or let CI handle it:
+
+```bash
+bash scripts/build-catalog.sh db/findmystar.db
+mkdir -p mobile/ios/FindMyStar/www
+cp db/findmystar.db mobile/ios/FindMyStar/www/findmystar.db
+```
+
+### 1.5 Bitcode
 
 Bitcode is **disabled** (`ENABLE_BITCODE = NO`). Rust does not support bitcode, and
 Apple deprecated bitcode submission as of Xcode 14.
 
-### 1.4 Linked Frameworks
+### 1.6 Linked Frameworks
 
 `ARKit`, `CoreLocation`, `CoreMotion`, `UserNotifications`, `StoreKit`, `AVFoundation`.
 

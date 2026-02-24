@@ -27,7 +27,10 @@ const LOCK_DURATION_MS = 2000; // sustained time to confirm lock
 
 let active = false;
 let targetObject: CelestialObject | null = null;
-let targetParams: { objectType: number; objectId: number } | null = null;
+// Engine path (Sun/Moon/Planets): positions computed at runtime
+let targetEngineParams: { objectType: number; objectId: number } | null = null;
+// RA/Dec path (Stars/Deep-sky): fixed coordinates from database
+let targetRaDec: { ra: number; dec: number } | null = null;
 let cachedLat = 0;
 let cachedLon = 0;
 let locationUpdateTimer: ReturnType<typeof setInterval> | null = null;
@@ -38,20 +41,22 @@ let listeners: TrackingCallback[] = [];
 let isLocked = false;
 let belowThresholdSince = 0;
 
-function resolveObjectParams(obj: CelestialObject): { objectType: number; objectId: number } {
-  if (obj.type === 'sun') {
-    return { objectType: Core.ObjectType.Sun, objectId: 0 };
+function setupTarget(obj: CelestialObject): void {
+  if (obj.type === 'sun' || obj.type === 'moon' || obj.planetId != null) {
+    // Engine path
+    if (obj.type === 'sun') {
+      targetEngineParams = { objectType: Core.ObjectType.Sun, objectId: 0 };
+    } else if (obj.type === 'moon') {
+      targetEngineParams = { objectType: Core.ObjectType.Moon, objectId: 0 };
+    } else {
+      targetEngineParams = { objectType: Core.ObjectType.Planet, objectId: obj.planetId! };
+    }
+    targetRaDec = null;
+  } else {
+    // RA/Dec path — coordinates from database
+    targetEngineParams = null;
+    targetRaDec = { ra: obj.ra!, dec: obj.dec! };
   }
-  if (obj.type === 'moon') {
-    return { objectType: Core.ObjectType.Moon, objectId: 0 };
-  }
-  if (obj.planetId != null) {
-    return { objectType: Core.ObjectType.Planet, objectId: obj.planetId };
-  }
-  if (obj.hipId != null) {
-    return { objectType: Core.ObjectType.Star, objectId: obj.hipId };
-  }
-  return { objectType: Core.ObjectType.Star, objectId: 0 };
 }
 
 async function updateLocation(): Promise<void> {
@@ -87,20 +92,28 @@ function updateLockState(angularDist: number, now: number): boolean {
 }
 
 async function trackingLoop(): Promise<void> {
-  if (!active || !targetParams) {
+  if (!active || (!targetEngineParams && !targetRaDec)) {
     return;
   }
 
   const now = Date.now();
 
   try {
-    const tracking = await Core.computeTracking(
-      targetParams.objectType,
-      targetParams.objectId,
-      cachedLat,
-      cachedLon,
-      now,
-    );
+    const tracking = targetEngineParams
+      ? await Core.computeTracking(
+          targetEngineParams.objectType,
+          targetEngineParams.objectId,
+          cachedLat,
+          cachedLon,
+          now,
+        )
+      : await Core.computeTrackingRaDec(
+          targetRaDec!.ra,
+          targetRaDec!.dec,
+          cachedLat,
+          cachedLon,
+          now,
+        );
 
     // Get device orientation as a direction vector from the quaternion
     const q = SensorFusion.getOrientation();
@@ -145,7 +158,7 @@ export async function initialize(obj: CelestialObject): Promise<void> {
   stop();
 
   targetObject = obj;
-  targetParams = resolveObjectParams(obj);
+  setupTarget(obj);
 
   // Get initial location
   await updateLocation();
@@ -184,7 +197,8 @@ export function stop(): void {
 
   SensorFusion.stop();
   targetObject = null;
-  targetParams = null;
+  targetEngineParams = null;
+  targetRaDec = null;
   isLocked = false;
   belowThresholdSince = 0;
 }

@@ -22,9 +22,13 @@ class AstronomyBridgeModule(reactContext: ReactApplicationContext) :
     private external fun nativeComputePosition(objectType: Int, objectId: Int, jd: Double): DoubleArray
     private external fun nativeComputeTracking(objectType: Int, objectId: Int, lat: Double, lon: Double, unixMs: Double): DoubleArray
     private external fun nativeComputeRiseSet(objectType: Int, objectId: Int, lat: Double, lon: Double, startMs: Double): DoubleArray
+    private external fun nativeComputeTrackingRaDec(ra: Double, dec: Double, lat: Double, lon: Double, unixMs: Double): DoubleArray
+    private external fun nativeComputeRiseSetRaDec(ra: Double, dec: Double, lat: Double, lon: Double, startMs: Double): DoubleArray
     private external fun nativeAltAzToVector3(alt: Double, az: Double): DoubleArray
     private external fun nativeAngularDistance(x1: Double, y1: Double, z1: Double, x2: Double, y2: Double, z2: Double): Double
     private external fun nativeClassifyTwilight(sunAlt: Double): Int
+    private external fun nativeCreateEntitlement(planType: Int, validUntilMs: Long, deviceId: String): ByteArray?
+    private external fun nativeCheckEntitlement(payload: ByteArray, deviceId: String, nowMs: Long): Int
     private external fun nativeCoreVersion(): String
 
     @ReactMethod
@@ -84,6 +88,36 @@ class AstronomyBridgeModule(reactContext: ReactApplicationContext) :
     }
 
     @ReactMethod
+    fun computeTrackingRaDec(ra: Double, dec: Double, lat: Double, lon: Double, unixMs: Double, promise: Promise) {
+        try {
+            val result = nativeComputeTrackingRaDec(ra, dec, lat, lon, unixMs)
+            val map = Arguments.createMap()
+            map.putDouble("altitude", result[0])
+            map.putDouble("azimuth", result[1])
+            map.putDouble("dirX", result[2])
+            map.putDouble("dirY", result[3])
+            map.putDouble("dirZ", result[4])
+            promise.resolve(map)
+        } catch (e: Exception) {
+            promise.reject("CORE_ERROR", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun computeRiseSetRaDec(ra: Double, dec: Double, lat: Double, lon: Double, startMs: Double, promise: Promise) {
+        try {
+            val result = nativeComputeRiseSetRaDec(ra, dec, lat, lon, startMs)
+            val map = Arguments.createMap()
+            map.putInt("status", result[0].toInt())
+            map.putDouble("riseMs", result[1])
+            map.putDouble("setMs", result[2])
+            promise.resolve(map)
+        } catch (e: Exception) {
+            promise.reject("CORE_ERROR", e.message)
+        }
+    }
+
+    @ReactMethod
     fun altAzToVector3(altitude: Double, azimuth: Double, promise: Promise) {
         try {
             val result = nativeAltAzToVector3(altitude, azimuth)
@@ -110,6 +144,30 @@ class AstronomyBridgeModule(reactContext: ReactApplicationContext) :
     fun classifyTwilight(sunAltitude: Double, promise: Promise) {
         try {
             promise.resolve(nativeClassifyTwilight(sunAltitude))
+        } catch (e: Exception) {
+            promise.reject("CORE_ERROR", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun createEntitlement(planType: Int, validUntilMs: Double, deviceId: String, promise: Promise) {
+        try {
+            val blob = nativeCreateEntitlement(planType, validUntilMs.toLong(), deviceId)
+            if (blob != null) {
+                promise.resolve(android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP))
+            } else {
+                promise.reject("CORE_ERROR", "Invalid plan type")
+            }
+        } catch (e: Exception) {
+            promise.reject("CORE_ERROR", e.message)
+        }
+    }
+
+    @ReactMethod
+    fun checkEntitlement(payloadBase64: String, deviceId: String, nowMs: Double, promise: Promise) {
+        try {
+            val payload = android.util.Base64.decode(payloadBase64, android.util.Base64.NO_WRAP)
+            promise.resolve(nativeCheckEntitlement(payload, deviceId, nowMs.toLong()))
         } catch (e: Exception) {
             promise.reject("CORE_ERROR", e.message)
         }

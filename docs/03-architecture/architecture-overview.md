@@ -168,6 +168,8 @@ The domain engine produces **identical results** given identical inputs:
 
 ### Object Tracking Flow (Real-Time)
 
+The tracking service uses **two computation paths** based on the object type:
+
 ```
 Device Sensors (30 FPS)
     │
@@ -180,21 +182,17 @@ SensorFusionService
     │ Fuses IMU data → Q_device
     │
     ▼
-TrackingService.computeDirection(object, Q_device)
+ObjectTrackingService.trackingLoop()
     │
-    ├─ EphemerisEngine.computeRA_DEC(object, time)
-    │   └─ Returns: RA, Dec
+    ├─ [Engine Path: Sun/Moon/Planets]
+    │   Core.computeTracking(objectType, objectId, lat, lon, unixMs)
+    │   └─ Rust ephemeris → RA/Dec → Alt/Az → direction vector
     │
-    ├─ CoordinateEngine.RA_DEC_to_AltAz(RA, Dec, lat, lon, time)
-    │   └─ Returns: Alt, Az
+    ├─ [RA/Dec Path: Stars/Deep-sky]
+    │   Core.computeTrackingRaDec(ra, dec, lat, lon, unixMs)
+    │   └─ Fixed J2000 coords from DB → Alt/Az → direction vector
     │
-    ├─ CoordinateEngine.AltAz_to_Vector(Alt, Az)
-    │   └─ Returns: V_target (3D unit vector)
-    │
-    ├─ VectorMath.computeAngularError(V_target, Q_device)
-    │   └─ Returns: angle, direction
-    │
-    └─ Returns: { direction, angle, locked }
+    └─ Returns: { altitude, azimuth, direction: {x, y, z} }
     │
     ▼
 ARScreen.render()
@@ -213,14 +211,16 @@ User Sets Alarm for Object
 AlarmScreen.setAlarm(object)
     │
     ▼
-VisibilityService.computeNextVisible(object, location)
+VisibilityService.getNextVisibleTime(object, location)
     │
-    ├─ EphemerisEngine.computeRA_DEC(object, time)
+    ├─ [Engine Path: Sun/Moon/Planets]
+    │   Core.computeRiseSet(objectType, objectId, lat, lon, startMs)
+    │
+    ├─ [RA/Dec Path: Stars/Deep-sky]
+    │   Core.computeRiseSetRaDec(ra, dec, lat, lon, startMs)
     │
     ├─ RiseSetSolver.computeRiseTime()
-    │   │ For stars: Analytical (H0 formula)
-    │   │ For planets: Iterative scan
-    │   └─ Returns: nextRiseTime (UTC)
+    │   └─ Analytical solution (H0 formula)
     │
     └─ Checks sun altitude at rise time
        (Only notify if twilight conditions met)
@@ -292,13 +292,22 @@ User receives local notification
 
 ### Mobile UI ↔ Rust Core
 
+The TypeScript wrapper (`FindMyStarCore.ts`) exposes two computation paths:
+
 ```typescript
-// TypeScript interface to Rust
-interface AstronomyEngine {
-  computeRA_DEC(objectId: string, timeMs: number): { ra: number; dec: number };
-  ra_dec_to_altaz(ra: number, dec: number, lat: number, lon: number, lst: number): { alt: number; az: number };
-  compute_angular_error(v_target: [number, number, number], q_device: [number, number, number, number]): number;
-}
+// Engine path: objectType/objectId → alt/az/direction (Sun/Moon/Planets)
+computeTracking(objectType, objectId, lat, lon, unixMs): TrackingResult
+computeRiseSet(objectType, objectId, lat, lon, startMs): RiseSetResult
+
+// RA/Dec path: raw coordinates → alt/az/direction (Stars/Deep-sky from DB)
+computeTrackingRaDec(ra, dec, lat, lon, unixMs): TrackingResult
+computeRiseSetRaDec(ra, dec, lat, lon, startMs): RiseSetResult
+
+// Utilities
+raDecToAltAz(ra, dec, lat, lon, unixMs): AltAz
+altAzToVector3(altitude, azimuth): Vector3
+angularDistance(v1, v2): number
+classifyTwilight(sunAltitude): number
 ```
 
 ### Sensor Input ↔ Application Layer

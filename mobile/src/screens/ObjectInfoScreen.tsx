@@ -5,6 +5,9 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
+  Modal,
+  Pressable,
   StyleSheet,
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -13,11 +16,13 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { useCatalogStore } from '../store/catalogStore';
 import { useTrackingStore } from '../store/trackingStore';
+import { useEntitlementStore } from '../store/entitlementStore';
 import * as VisibilityService from '../services/VisibilityService';
 import * as LocationService from '../services/LocationService';
 import type { CelestialObject } from '../data/CatalogRepository';
 import type { RiseSetInfo } from '../services/VisibilityService';
 import type { RootStackParamList } from '../navigation/types';
+import PurchaseSheet from '../purchase/PurchaseSheet';
 
 type Route = RouteProp<RootStackParamList, 'ObjectInfo'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -42,11 +47,25 @@ export default function ObjectInfoScreen(): React.JSX.Element {
 
   const getObjectById = useCatalogStore(s => s.getObjectById);
   const createAlarm = useTrackingStore(s => s.createAlarm);
+  const deleteAlarm = useTrackingStore(s => s.deleteAlarm);
+  const loadAlarms = useTrackingStore(s => s.loadAlarms);
+  const trackedObjects = useTrackingStore(s => s.trackedObjects);
+
+  const isPro = useEntitlementStore(s => s.isPro);
+
+  const existingAlarm = trackedObjects.find(t => t.objectId === objectId) ?? null;
 
   const [obj, setObj] = useState<CelestialObject | null>(null);
   const [riseSet, setRiseSet] = useState<RiseSetInfo | null>(null);
   const [altAz, setAltAz] = useState<{ altitude: number; azimuth: number } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [alarmLoading, setAlarmLoading] = useState(false);
+  const [showAlarmPicker, setShowAlarmPicker] = useState(false);
+  const [showPurchaseSheet, setShowPurchaseSheet] = useState(false);
+
+  useEffect(() => {
+    loadAlarms();
+  }, [loadAlarms]);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,11 +127,54 @@ export default function ObjectInfoScreen(): React.JSX.Element {
     }
   }, [navigation, obj]);
 
-  const handleSetAlarm = useCallback(async () => {
-    if (obj) {
-      await createAlarm(obj.id);
+  const doCreateAlarm = useCallback(
+    async (minutes: number) => {
+      if (!obj) {
+        return;
+      }
+      setShowAlarmPicker(false);
+      setAlarmLoading(true);
+      try {
+        // MVP: only one alarm per object — replace existing
+        if (existingAlarm) {
+          await deleteAlarm(existingAlarm.id);
+        }
+        await createAlarm(obj.id, { notifyBeforeMinutes: minutes });
+        Alert.alert(
+          'Alert Set',
+          `You'll be notified ${minutes} min before ${obj.commonName ?? obj.name} rises.`,
+        );
+      } catch (e) {
+        Alert.alert('Failed to Set Alert', e instanceof Error ? e.message : 'Unknown error');
+      } finally {
+        setAlarmLoading(false);
+      }
+    },
+    [createAlarm, deleteAlarm, existingAlarm, obj],
+  );
+
+  const handleRemoveAlarm = useCallback(async () => {
+    if (!existingAlarm) {
+      return;
     }
-  }, [createAlarm, obj]);
+    setShowAlarmPicker(false);
+    setAlarmLoading(true);
+    try {
+      await deleteAlarm(existingAlarm.id);
+      Alert.alert('Alert Removed', 'The visibility alert has been removed.');
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Failed to remove alert');
+    } finally {
+      setAlarmLoading(false);
+    }
+  }, [deleteAlarm, existingAlarm]);
+
+  const handleSetAlarm = useCallback(() => {
+    if (!obj || alarmLoading) {
+      return;
+    }
+    setShowAlarmPicker(true);
+  }, [obj, alarmLoading]);
 
   if (loading) {
     return (
@@ -131,6 +193,7 @@ export default function ObjectInfoScreen(): React.JSX.Element {
   }
 
   const isAboveHorizon = altAz ? altAz.altitude > 0 : false;
+  const isLocked = obj.isPro && !isPro;
 
   return (
     <ScrollView
@@ -138,9 +201,16 @@ export default function ObjectInfoScreen(): React.JSX.Element {
       contentContainerStyle={styles.content}>
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.surface }]}>
-        <Text style={[styles.objectName, { color: colors.text }]} accessibilityRole="header">
-          {obj.commonName ?? obj.name}
-        </Text>
+        <View style={styles.headerTitleRow}>
+          <Text style={[styles.objectName, { color: colors.text }]} accessibilityRole="header">
+            {obj.commonName ?? obj.name}
+          </Text>
+          {isLocked && (
+            <View style={[styles.proHeaderBadge, { backgroundColor: colors.primary + '20' }]}>
+              <Text style={[styles.proHeaderBadgeText, { color: colors.primary }]}>PRO</Text>
+            </View>
+          )}
+        </View>
         {obj.commonName && (
           <Text style={[styles.catalogName, { color: colors.textSecondary }]}>{obj.name}</Text>
         )}
@@ -223,23 +293,79 @@ export default function ObjectInfoScreen(): React.JSX.Element {
         )}
       </View>
 
-      {/* Action Buttons */}
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={[styles.primaryButton, { backgroundColor: colors.primary }]}
-          onPress={handleTrack}
-          accessibilityRole="button"
-          accessibilityLabel="Track this object in AR view">
-          <Text style={[styles.buttonText, { color: colors.textInverse }]}>Track</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.secondaryButton, { borderColor: colors.primary }]}
-          onPress={handleSetAlarm}
-          accessibilityRole="button"
-          accessibilityLabel="Set visibility alert for this object">
-          <Text style={[styles.buttonText, { color: colors.primary }]}>Set Alert</Text>
-        </TouchableOpacity>
-      </View>
+      {/* Action Buttons or Upgrade Banner */}
+      {isLocked ? (
+        <View
+          style={[
+            styles.upgradeBanner,
+            { backgroundColor: colors.primary + '12', borderColor: colors.primary + '40' },
+          ]}>
+          <Text style={[styles.upgradeBannerTitle, { color: colors.primary }]}>Pro Feature</Text>
+          <Text style={[styles.upgradeBannerText, { color: colors.textSecondary }]}>
+            Track and set alerts for this object with FindMyStar Pro.
+          </Text>
+          <TouchableOpacity
+            style={[styles.upgradeButton, { backgroundColor: colors.primary }]}
+            onPress={() => setShowPurchaseSheet(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Unlock with Pro">
+            <Text style={[styles.buttonText, { color: colors.textInverse }]}>Unlock with Pro</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <>
+          <View style={styles.actions}>
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                { backgroundColor: isAboveHorizon ? colors.primary : colors.border },
+              ]}
+              onPress={handleTrack}
+              disabled={!isAboveHorizon}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isAboveHorizon
+                  ? 'Track this object in AR view'
+                  : 'Cannot track: object is below the horizon'
+              }>
+              <Text
+                style={[
+                  styles.buttonText,
+                  { color: isAboveHorizon ? colors.textInverse : colors.textSecondary },
+                ]}>
+                Track
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.secondaryButton,
+                { borderColor: colors.primary },
+                alarmLoading && styles.disabledOpacity,
+              ]}
+              onPress={handleSetAlarm}
+              disabled={alarmLoading}
+              accessibilityRole="button"
+              accessibilityLabel={
+                existingAlarm ? 'Edit visibility alert' : 'Set visibility alert for this object'
+              }>
+              {alarmLoading ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={[styles.buttonText, { color: colors.primary }]}>
+                  {existingAlarm ? 'Edit Alert' : 'Set Alert'}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {!isAboveHorizon && altAz && (
+            <Text style={[styles.horizonHint, { color: colors.textSecondary }]}>
+              Tracking is available when the object rises above the horizon.
+              {riseSet?.riseTime != null && ` Next rise: ${formatTime(riseSet.riseTime)}`}
+            </Text>
+          )}
+        </>
+      )}
 
       {/* Description */}
       {obj.description && (
@@ -254,6 +380,57 @@ export default function ObjectInfoScreen(): React.JSX.Element {
           </Text>
         </View>
       )}
+      {/* Alert Timing Picker Modal */}
+      <Modal
+        visible={showAlarmPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAlarmPicker(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowAlarmPicker(false)}>
+          <View
+            style={[styles.modalContent, { backgroundColor: colors.cardBackground }]}
+            onStartShouldSetResponder={() => true}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>
+              {existingAlarm ? 'Edit Alert' : 'Alert Before Rise'}
+            </Text>
+            <Text style={[styles.modalSubtitle, { color: colors.textSecondary }]}>
+              How early do you want to be notified?
+            </Text>
+            {[15, 30, 45, 60].map(min => {
+              const isCurrent = existingAlarm?.notifyBeforeMinutes === min;
+              return (
+                <TouchableOpacity
+                  key={min}
+                  style={[
+                    styles.modalOption,
+                    { borderColor: colors.border },
+                    isCurrent && { backgroundColor: colors.primary + '18' },
+                  ]}
+                  onPress={() => doCreateAlarm(min)}>
+                  <Text style={[styles.modalOptionText, { color: colors.primary }]}>
+                    {min} minutes{isCurrent ? '  (current)' : ''}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            {existingAlarm && (
+              <TouchableOpacity
+                style={[styles.modalOption, { borderColor: colors.border }]}
+                onPress={handleRemoveAlarm}>
+                <Text style={[styles.modalOptionText, { color: colors.error }]}>Remove Alert</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.modalCancel} onPress={() => setShowAlarmPicker(false)}>
+              <Text style={[styles.modalCancelText, { color: colors.textSecondary }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+      <PurchaseSheet
+        visible={showPurchaseSheet}
+        onClose={() => setShowPurchaseSheet(false)}
+        onPurchaseComplete={() => {}}
+      />
     </ScrollView>
   );
 }
@@ -294,6 +471,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 2,
   },
+  disabledOpacity: { opacity: 0.6 },
   buttonText: { fontSize: 16, fontWeight: '600' },
+  horizonHint: { fontSize: 13, marginHorizontal: 16, marginTop: 4, textAlign: 'center' },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  proHeaderBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  proHeaderBadgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  upgradeBanner: {
+    margin: 16,
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  upgradeBannerTitle: { fontSize: 16, fontWeight: '700', marginBottom: 6 },
+  upgradeBannerText: { fontSize: 14, textAlign: 'center', marginBottom: 16, lineHeight: 20 },
+  upgradeButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
   description: { fontSize: 14, lineHeight: 20 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '80%',
+    borderRadius: 16,
+    padding: 24,
+    elevation: 8,
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 4 },
+  modalSubtitle: { fontSize: 14, marginBottom: 16 },
+  modalOption: {
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    alignItems: 'center',
+  },
+  modalOptionText: { fontSize: 16, fontWeight: '600' },
+  modalCancel: { paddingTop: 16, alignItems: 'center' },
+  modalCancelText: { fontSize: 15 },
 });

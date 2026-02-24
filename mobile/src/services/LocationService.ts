@@ -1,11 +1,12 @@
 /**
  * LocationService - GPS location access with fallback to last-known position.
  *
- * Uses React Native's Geolocation API (provided by @react-native-community/geolocation
- * or equivalent). Wraps platform differences for Android/iOS.
+ * Uses @react-native-community/geolocation for platform GPS access.
+ * Wraps platform differences for Android/iOS.
  */
 
 import { PermissionsAndroid, Platform } from 'react-native';
+import Geolocation from '@react-native-community/geolocation';
 
 export interface Location {
   lat: number;
@@ -14,47 +15,14 @@ export interface Location {
   timestamp: number;
 }
 
-// React Native geolocation types (not available in DOM lib)
-interface GeoPosition {
-  coords: { latitude: number; longitude: number; accuracy: number };
-  timestamp: number;
-}
-
-interface GeoError {
-  code: number;
-  message: string;
-}
-
-interface GeoOptions {
-  enableHighAccuracy?: boolean;
-  timeout?: number;
-  maximumAge?: number;
-  distanceFilter?: number;
-  interval?: number;
-}
-
-// Declared globally by @react-native-community/geolocation at runtime
-declare const navigator: {
-  geolocation: {
-    getCurrentPosition(
-      success: (pos: GeoPosition) => void,
-      error: (err: GeoError) => void,
-      options?: GeoOptions,
-    ): void;
-    watchPosition(
-      success: (pos: GeoPosition) => void,
-      error: (err: GeoError) => void,
-      options?: GeoOptions,
-    ): number;
-    clearWatch(id: number): void;
-  };
-};
-
 let watchId: number | null = null;
 let lastKnown: Location | null = null;
 let onUpdate: ((loc: Location) => void) | null = null;
 
-function toLocation(pos: GeoPosition): Location {
+function toLocation(pos: {
+  coords: { latitude: number; longitude: number; accuracy: number };
+  timestamp: number;
+}): Location {
   return {
     lat: pos.coords.latitude,
     lon: pos.coords.longitude,
@@ -76,7 +44,7 @@ export async function requestPermission(): Promise<boolean> {
 
 export function getCurrentLocation(): Promise<Location> {
   return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(
+    Geolocation.getCurrentPosition(
       pos => {
         const loc = toLocation(pos);
         lastKnown = loc;
@@ -97,7 +65,7 @@ export function getCurrentLocation(): Promise<Location> {
 export function startWatching(intervalMs: number, callback: (loc: Location) => void): void {
   stopWatching();
   onUpdate = callback;
-  watchId = navigator.geolocation.watchPosition(
+  watchId = Geolocation.watchPosition(
     pos => {
       const loc = toLocation(pos);
       lastKnown = loc;
@@ -116,7 +84,7 @@ export function startWatching(intervalMs: number, callback: (loc: Location) => v
 
 export function stopWatching(): void {
   if (watchId !== null) {
-    navigator.geolocation.clearWatch(watchId);
+    Geolocation.clearWatch(watchId);
     watchId = null;
   }
   onUpdate = null;

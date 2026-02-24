@@ -29,22 +29,9 @@ android {
 
 ### 1.2 Rust NDK Integration
 
-The Rust domain engine compiles to `libastronomy_engine.so` via the Android NDK using
-CMake to orchestrate the native build:
-
-```groovy
-android {
-    externalNativeBuild {
-        cmake {
-            path "src/main/cpp/CMakeLists.txt"
-            version "3.22.1"
-        }
-    }
-    defaultConfig {
-        ndk { abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64' }
-    }
-}
-```
+The Rust domain engine compiles to `libfindmystar_core.so` and is placed in
+`jniLibs/<abi>/`. The Kotlin bridge module (`AstronomyBridgeModule.kt` in
+`com.findmystar`) loads it via `System.loadLibrary("findmystar_core")`.
 
 Cross-compilation targets for each ABI:
 
@@ -54,13 +41,25 @@ Cross-compilation targets for each ABI:
 | `armeabi-v7a` | `armv7-linux-androideabi` |
 | `x86_64` | `x86_64-linux-android` |
 
-### 1.3 ProGuard / R8 Configuration
+### 1.3 Catalog Database Bundling
+
+The SQLite catalog database must be present at
+`mobile/android/app/src/main/assets/findmystar.db` before building. Build locally
+or let CI handle it:
+
+```bash
+bash scripts/build-catalog.sh db/findmystar.db
+mkdir -p mobile/android/app/src/main/assets
+cp db/findmystar.db mobile/android/app/src/main/assets/findmystar.db
+```
+
+### 1.4 ProGuard / R8 Configuration
 
 Release builds use R8 with custom rules for the native bridge:
 
 ```proguard
--keep class com.findmystar.engine.AstronomyBridge { *; }
--keep class com.findmystar.engine.** { native <methods>; }
+-keep class com.findmystar.AstronomyBridgeModule { *; }
+-keep class com.findmystar.** { native <methods>; }
 -keep class com.facebook.react.** { *; }
 -dontwarn com.facebook.react.**
 ```

@@ -105,12 +105,53 @@ Sun (-26.74) through faintest Messier (~+9.0). Solar system magnitudes stored as
 
 The catalog is populated at **build time**, not runtime:
 
-1. Source CSV/JSON files stored in the repository under `data/catalog/`
-2. Build script (`scripts/build-catalog.ts`) converts source data to SQL INSERT statements
-3. Resulting SQLite database bundled into app assets
-4. App opens this pre-populated database on first launch
+1. Schema defined in `db/schema.sql`
+2. Seed data in SQL files under `db/seeds/` (e.g., `stars.sql`, `planets.sql`, `messier.sql`)
+3. Build script (`scripts/build-catalog.sh`) creates a SQLite database by running schema + seed files
+4. CI pipeline copies the built database into platform-specific asset directories
+5. App opens this pre-populated database on first launch via `react-native-sqlite-storage`
 
-**Example INSERT statements:**
+### Build Script
+
+```bash
+# scripts/build-catalog.sh <output-path>
+# Example: bash scripts/build-catalog.sh db/findmystar.db
+sqlite3 "$1" < db/schema.sql
+for seed in db/seeds/*.sql; do
+  sqlite3 "$1" < "$seed"
+done
+```
+
+### Platform-Specific Bundling
+
+| Platform | Asset Location | Bundling Mechanism |
+|----------|---------------|-------------------|
+| Android | `mobile/android/app/src/main/assets/findmystar.db` | Gradle bundles `assets/` into APK/AAB |
+| iOS | `mobile/ios/FindMyStar/www/findmystar.db` | Xcode bundles `www/` directory (for `react-native-sqlite-storage` with `createFromLocation: '~findmystar.db'`) |
+
+Both locations are listed in `.gitignore` since the database is a build artifact.
+
+### CI Pipeline Integration
+
+Both `mobile-build.yml` and `release.yml` include a "Build catalog database" step
+before the platform builds:
+
+```yaml
+- name: Build catalog database
+  run: |
+    bash scripts/build-catalog.sh db/findmystar.db
+    mkdir -p mobile/android/app/src/main/assets
+    cp db/findmystar.db mobile/android/app/src/main/assets/findmystar.db
+```
+
+For iOS builds, the database is also copied to the iOS asset location:
+
+```yaml
+    mkdir -p mobile/ios/FindMyStar/www
+    cp db/findmystar.db mobile/ios/FindMyStar/www/findmystar.db
+```
+
+**Example INSERT statements (from seed files):**
 
 ```sql
 -- Solar system object (NULL RA/Dec, computed at runtime)

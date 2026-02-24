@@ -3,6 +3,10 @@ import * as CatalogRepo from '../data/CatalogRepository';
 
 // Re-export the canonical CelestialObject type from the repository
 export type { CelestialObject } from '../data/CatalogRepository';
+
+// Note: Pro objects are always included in search results and catalog listings.
+// The entitlement gate is at the UI layer (lock badge on SearchScreen,
+// upgrade prompt on ObjectInfoScreen). This maximizes discoverability.
 import type { CelestialObject } from '../data/CatalogRepository';
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;

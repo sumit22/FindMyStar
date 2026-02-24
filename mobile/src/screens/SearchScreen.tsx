@@ -12,6 +12,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { useCatalogStore } from '../store/catalogStore';
+import { useEntitlementStore } from '../store/entitlementStore';
 import type { CelestialObject } from '../data/CatalogRepository';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -40,7 +41,15 @@ function VisibilityBadge({ magnitude }: { magnitude: number }) {
   );
 }
 
-function ResultItem({ item, onPress }: { item: CelestialObject; onPress: () => void }) {
+function ResultItem({
+  item,
+  onPress,
+  isLocked,
+}: {
+  item: CelestialObject;
+  onPress: () => void;
+  isLocked: boolean;
+}) {
   const { colors } = useTheme();
   const icon = TYPE_ICONS[item.type] ?? '\u2022';
   return (
@@ -51,15 +60,22 @@ function ResultItem({ item, onPress }: { item: CelestialObject; onPress: () => v
       ]}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${item.commonName ?? item.name}, ${item.type}, magnitude ${item.magnitude.toFixed(1)}`}
+      accessibilityLabel={`${item.commonName ?? item.name}, ${item.type}, magnitude ${item.magnitude.toFixed(1)}${isLocked ? ', Pro required' : ''}`}
       activeOpacity={0.7}>
       <View style={styles.resultIcon}>
         <Text style={[styles.iconText, { color: colors.accent }]}>{icon}</Text>
       </View>
       <View style={styles.resultContent}>
-        <Text style={[styles.resultName, { color: colors.text }]} numberOfLines={1}>
-          {item.commonName ?? item.name}
-        </Text>
+        <View style={styles.nameRow}>
+          <Text style={[styles.resultName, { color: colors.text }]} numberOfLines={1}>
+            {item.commonName ?? item.name}
+          </Text>
+          {isLocked && (
+            <View style={[styles.proBadge, { backgroundColor: colors.primary + '20' }]}>
+              <Text style={[styles.proBadgeText, { color: colors.primary }]}>PRO</Text>
+            </View>
+          )}
+        </View>
         {item.commonName && (
           <Text style={[styles.resultCatalog, { color: colors.textSecondary }]} numberOfLines={1}>
             {item.name}
@@ -84,6 +100,7 @@ export default function SearchScreen(): React.JSX.Element {
   const loading = useCatalogStore(s => s.loading);
   const error = useCatalogStore(s => s.error);
   const searchObjects = useCatalogStore(s => s.searchObjects);
+  const isPro = useEntitlementStore(s => s.isPro);
 
   useEffect(() => {
     // Auto-focus on mount
@@ -100,9 +117,13 @@ export default function SearchScreen(): React.JSX.Element {
 
   const renderItem = useCallback(
     ({ item }: { item: CelestialObject }) => (
-      <ResultItem item={item} onPress={() => handleSelect(item.id)} />
+      <ResultItem
+        item={item}
+        onPress={() => handleSelect(item.id)}
+        isLocked={item.isPro && !isPro}
+      />
     ),
-    [handleSelect],
+    [handleSelect, isPro],
   );
 
   const keyExtractor = useCallback((item: CelestialObject) => String(item.id), []);
@@ -200,7 +221,10 @@ const styles = StyleSheet.create({
   resultIcon: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
   iconText: { fontSize: 22 },
   resultContent: { flex: 1, marginLeft: 8 },
-  resultName: { fontSize: 16, fontWeight: '600' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  resultName: { fontSize: 16, fontWeight: '600', flexShrink: 1 },
+  proBadge: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
+  proBadgeText: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
   resultCatalog: { fontSize: 12, marginTop: 1 },
   resultType: { fontSize: 12, marginTop: 2 },
   badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },

@@ -3,6 +3,10 @@
  *
  * Delegates astronomical math to the Rust core engine via FFI bridge.
  * Handles circumpolar, never-visible, and regular rise/set cases.
+ *
+ * Two computation paths:
+ * - Engine path (Sun/Moon/Planets): positions computed at runtime by ephemeris engine
+ * - RA/Dec path (Stars/Deep-sky): fixed J2000 coordinates from the database
  */
 
 import * as Core from '../native/FindMyStarCore';
@@ -23,22 +27,48 @@ export interface OptimalViewingResult {
   sunAltitudeAtPeak: number;
 }
 
-/** Map CelestialObject type/fields to FFI objectType + objectId */
-function resolveObjectParams(obj: CelestialObject): { objectType: number; objectId: number } {
+/** Objects whose positions are computed at runtime by the ephemeris engine */
+function hasEngineEntry(obj: CelestialObject): boolean {
+  return obj.type === 'sun' || obj.type === 'moon' || obj.planetId != null;
+}
+
+/** Map engine-path objects to FFI objectType + objectId */
+function getEngineParams(obj: CelestialObject): { objectType: number; objectId: number } {
   if (obj.type === 'sun') {
     return { objectType: Core.ObjectType.Sun, objectId: 0 };
   }
   if (obj.type === 'moon') {
     return { objectType: Core.ObjectType.Moon, objectId: 0 };
   }
-  if (obj.planetId != null) {
-    return { objectType: Core.ObjectType.Planet, objectId: obj.planetId };
+  return { objectType: Core.ObjectType.Planet, objectId: obj.planetId! };
+}
+
+/** Compute tracking (alt/az/direction) using the appropriate path */
+async function doComputeTracking(
+  obj: CelestialObject,
+  lat: number,
+  lon: number,
+  unixMs: number,
+): Promise<Core.TrackingResult> {
+  if (hasEngineEntry(obj)) {
+    const { objectType, objectId } = getEngineParams(obj);
+    return Core.computeTracking(objectType, objectId, lat, lon, unixMs);
   }
-  if (obj.hipId != null) {
-    return { objectType: Core.ObjectType.Star, objectId: obj.hipId };
+  return Core.computeTrackingRaDec(obj.ra!, obj.dec!, lat, lon, unixMs);
+}
+
+/** Compute rise/set using the appropriate path */
+async function doComputeRiseSet(
+  obj: CelestialObject,
+  lat: number,
+  lon: number,
+  startMs: number,
+): Promise<Core.RiseSetResult> {
+  if (hasEngineEntry(obj)) {
+    const { objectType, objectId } = getEngineParams(obj);
+    return Core.computeRiseSet(objectType, objectId, lat, lon, startMs);
   }
-  // Deep-sky objects with fixed RA/Dec: treat as star with id 0 (will use RA/Dec directly)
-  return { objectType: Core.ObjectType.Star, objectId: 0 };
+  return Core.computeRiseSetRaDec(obj.ra!, obj.dec!, lat, lon, startMs);
 }
 
 /**
@@ -50,23 +80,26 @@ export async function computeRiseSet(
   lon: number,
   startMs?: number,
 ): Promise<RiseSetInfo> {
-  const { objectType, objectId } = resolveObjectParams(obj);
   const now = startMs ?? Date.now();
 
-  const result = await Core.computeRiseSet(objectType, objectId, lat, lon, now);
+  try {
+    const result = await doComputeRiseSet(obj, lat, lon, now);
 
-  if (result.status === Core.RiseSetStatus.AlwaysVisible) {
-    return { riseTime: null, setTime: null, isCircumpolar: true, isNeverVisible: false };
+    if (result.status === Core.RiseSetStatus.AlwaysVisible) {
+      return { riseTime: null, setTime: null, isCircumpolar: true, isNeverVisible: false };
+    }
+    if (result.status === Core.RiseSetStatus.NeverVisible) {
+      return { riseTime: null, setTime: null, isCircumpolar: false, isNeverVisible: true };
+    }
+    return {
+      riseTime: result.riseMs,
+      setTime: result.setMs,
+      isCircumpolar: false,
+      isNeverVisible: false,
+    };
+  } catch {
+    return { riseTime: null, setTime: null, isCircumpolar: false, isNeverVisible: false };
   }
-  if (result.status === Core.RiseSetStatus.NeverVisible) {
-    return { riseTime: null, setTime: null, isCircumpolar: false, isNeverVisible: true };
-  }
-  return {
-    riseTime: result.riseMs,
-    setTime: result.setMs,
-    isCircumpolar: false,
-    isNeverVisible: false,
-  };
 }
 
 /**
@@ -77,11 +110,12 @@ export async function isCurrentlyVisible(
   lat: number,
   lon: number,
 ): Promise<boolean> {
-  const { objectType, objectId } = resolveObjectParams(obj);
-  const now = Date.now();
-
-  const tracking = await Core.computeTracking(objectType, objectId, lat, lon, now);
-  return tracking.altitude > 0;
+  try {
+    const tracking = await doComputeTracking(obj, lat, lon, Date.now());
+    return !isNaN(tracking.altitude) && tracking.altitude > 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -92,8 +126,8 @@ export async function getCurrentAltAz(
   lat: number,
   lon: number,
 ): Promise<Core.AltAz> {
-  const { objectType, objectId } = resolveObjectParams(obj);
-  return Core.computeTracking(objectType, objectId, lat, lon, Date.now());
+  const result = await doComputeTracking(obj, lat, lon, Date.now());
+  return { altitude: result.altitude, azimuth: result.azimuth };
 }
 
 /**
@@ -101,6 +135,9 @@ export async function getCurrentAltAz(
  */
 export async function getTwilightState(lat: number, lon: number): Promise<number> {
   const sunTracking = await Core.computeTracking(Core.ObjectType.Sun, 0, lat, lon, Date.now());
+  if (isNaN(sunTracking.altitude)) {
+    return Core.TwilightState.Night; // Safe fallback
+  }
   return Core.classifyTwilight(sunTracking.altitude);
 }
 
@@ -115,19 +152,27 @@ export async function getNextVisibleTime(
   lon: number,
   minAltitude = 10,
 ): Promise<number | null> {
-  const { objectType, objectId } = resolveObjectParams(obj);
   const now = Date.now();
   const scanEnd = now + 48 * 3600 * 1000;
   const step = 5 * 60 * 1000; // 5 minutes
 
   for (let t = now; t < scanEnd; t += step) {
-    const [objTracking, sunTracking] = await Promise.all([
-      Core.computeTracking(objectType, objectId, lat, lon, t),
-      Core.computeTracking(Core.ObjectType.Sun, 0, lat, lon, t),
-    ]);
+    try {
+      const [objTracking, sunTracking] = await Promise.all([
+        doComputeTracking(obj, lat, lon, t),
+        Core.computeTracking(Core.ObjectType.Sun, 0, lat, lon, t),
+      ]);
 
-    if (objTracking.altitude >= minAltitude && sunTracking.altitude < -6) {
-      return t;
+      if (
+        !isNaN(objTracking.altitude) &&
+        !isNaN(sunTracking.altitude) &&
+        objTracking.altitude >= minAltitude &&
+        sunTracking.altitude < -6
+      ) {
+        return t;
+      }
+    } catch {
+      continue;
     }
   }
 
@@ -144,7 +189,6 @@ export async function computeOptimalViewing(
   lon: number,
   minAltitude = 10,
 ): Promise<OptimalViewingResult | null> {
-  const { objectType, objectId } = resolveObjectParams(obj);
   const now = Date.now();
   const scanEnd = now + 48 * 3600 * 1000;
   const step = 5 * 60 * 1000;
@@ -156,23 +200,31 @@ export async function computeOptimalViewing(
   let windowEnd = -1;
 
   for (let t = now; t < scanEnd; t += step) {
-    const [objTracking, sunTracking] = await Promise.all([
-      Core.computeTracking(objectType, objectId, lat, lon, t),
-      Core.computeTracking(Core.ObjectType.Sun, 0, lat, lon, t),
-    ]);
+    try {
+      const [objTracking, sunTracking] = await Promise.all([
+        doComputeTracking(obj, lat, lon, t),
+        Core.computeTracking(Core.ObjectType.Sun, 0, lat, lon, t),
+      ]);
 
-    const visible = objTracking.altitude >= minAltitude && sunTracking.altitude < -6;
+      if (isNaN(objTracking.altitude) || isNaN(sunTracking.altitude)) {
+        continue;
+      }
 
-    if (visible) {
-      if (windowStart < 0) {
-        windowStart = t;
+      const visible = objTracking.altitude >= minAltitude && sunTracking.altitude < -6;
+
+      if (visible) {
+        if (windowStart < 0) {
+          windowStart = t;
+        }
+        windowEnd = t;
+        if (objTracking.altitude > bestAlt) {
+          bestAlt = objTracking.altitude;
+          bestTime = t;
+          bestSunAlt = sunTracking.altitude;
+        }
       }
-      windowEnd = t;
-      if (objTracking.altitude > bestAlt) {
-        bestAlt = objTracking.altitude;
-        bestTime = t;
-        bestSunAlt = sunTracking.altitude;
-      }
+    } catch {
+      continue;
     }
   }
 

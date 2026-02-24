@@ -1,9 +1,19 @@
 import React, { useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  StyleSheet,
+} from 'react-native';
 import { useTheme } from '../theme/ThemeContext';
 import { usePreferencesStore } from '../store/preferencesStore';
 import type { ThemePref } from '../store/preferencesStore';
 import * as Core from '../native/FindMyStarCore';
+import { usePurchase } from '../purchase/usePurchase';
+
+const DevSettingsPanel = __DEV__ ? require('../__dev__/DevSettingsPanel').default : null;
 
 const THEME_OPTIONS: { label: string; value: ThemePref }[] = [
   { label: 'Dark', value: 'dark' },
@@ -89,6 +99,8 @@ export default function SettingsScreen(): React.JSX.Element {
       .catch(() => setCoreVersion('unavailable'));
   }, []);
 
+  const { restore, loading: restoreLoading } = usePurchase();
+
   const handleToggleNotifications = useCallback(() => {
     setNotificationsEnabled(!notificationsEnabled);
   }, [notificationsEnabled, setNotificationsEnabled]);
@@ -124,6 +136,23 @@ export default function SettingsScreen(): React.JSX.Element {
         />
       ))}
 
+      <SectionHeader title="PURCHASES" />
+      <TouchableOpacity
+        style={[
+          styles.optionRow,
+          { backgroundColor: colors.cardBackground, borderColor: colors.border },
+        ]}
+        onPress={restore}
+        disabled={restoreLoading}
+        accessibilityRole="button"
+        accessibilityLabel="Restore previous purchases">
+        {restoreLoading ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <Text style={[styles.optionLabel, { color: colors.primary }]}>Restore Purchases</Text>
+        )}
+      </TouchableOpacity>
+
       <SectionHeader title="ABOUT" />
       <View
         style={[
@@ -140,6 +169,8 @@ export default function SettingsScreen(): React.JSX.Element {
           device. No data is collected or transmitted.
         </Text>
       </View>
+
+      {__DEV__ && DevSettingsPanel && <DevSettingsPanel />}
     </ScrollView>
   );
 }

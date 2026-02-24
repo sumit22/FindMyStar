@@ -18,6 +18,7 @@ export interface CelestialObject {
   planetId: number | null;
   distanceLy: number | null;
   description: string | null;
+  isPro: boolean;
 }
 
 export interface TrackedObject {
@@ -80,7 +81,7 @@ class LRUCache<K, V> {
 // Repository
 // ============================================================================
 
-let db: SQLiteDatabase | null = null;
+let dbPromise: Promise<SQLiteDatabase> | null = null;
 const objectCache = new LRUCache<number, CelestialObject>(100);
 
 function mapRow(row: Record<string, unknown>): CelestialObject {
@@ -96,6 +97,7 @@ function mapRow(row: Record<string, unknown>): CelestialObject {
     planetId: (row.planet_id as number) ?? null,
     distanceLy: (row.distance_ly as number) ?? null,
     description: (row.description as string) ?? null,
+    isPro: (row.is_pro as number) === 1,
   };
 }
 
@@ -115,16 +117,15 @@ function mapTrackedRow(row: Record<string, unknown>): TrackedObject {
   };
 }
 
-async function getDb(): Promise<SQLiteDatabase> {
-  if (db) {
-    return db;
+function getDb(): Promise<SQLiteDatabase> {
+  if (!dbPromise) {
+    dbPromise = SQLite.openDatabase({
+      name: 'findmystar.db',
+      location: 'default',
+      createFromLocation: '~findmystar.db',
+    });
   }
-  db = await SQLite.openDatabase({
-    name: 'findmystar.db',
-    location: 'default',
-    createFromLocation: '~findmystar.db',
-  });
-  return db;
+  return dbPromise;
 }
 
 async function query<T>(
@@ -151,10 +152,15 @@ async function execute(sql: string, params: (string | number | null)[]): Promise
 // Public API
 // ============================================================================
 
-export async function search(queryStr: string, limit = 50): Promise<CelestialObject[]> {
+export async function search(
+  queryStr: string,
+  limit = 50,
+  includePro = true,
+): Promise<CelestialObject[]> {
   const pattern = `%${queryStr}%`;
+  const proFilter = includePro ? '' : ' AND is_pro = 0';
   return query(
-    'SELECT * FROM objects WHERE name LIKE ? OR common_name LIKE ? ORDER BY magnitude ASC LIMIT ?',
+    `SELECT * FROM objects WHERE (name LIKE ? OR common_name LIKE ?)${proFilter} ORDER BY magnitude ASC LIMIT ?`,
     [pattern, pattern, limit],
     mapRow,
   );
@@ -173,12 +179,18 @@ export async function getById(id: number): Promise<CelestialObject | null> {
   return null;
 }
 
-export async function getByType(type: string): Promise<CelestialObject[]> {
-  return query('SELECT * FROM objects WHERE type = ? ORDER BY magnitude ASC', [type], mapRow);
+export async function getByType(type: string, includePro = true): Promise<CelestialObject[]> {
+  const proFilter = includePro ? '' : ' AND is_pro = 0';
+  return query(
+    `SELECT * FROM objects WHERE type = ?${proFilter} ORDER BY magnitude ASC`,
+    [type],
+    mapRow,
+  );
 }
 
-export async function getAllObjects(): Promise<CelestialObject[]> {
-  return query('SELECT * FROM objects ORDER BY magnitude ASC', [], mapRow);
+export async function getAllObjects(includePro = true): Promise<CelestialObject[]> {
+  const proFilter = includePro ? '' : ' WHERE is_pro = 0';
+  return query(`SELECT * FROM objects${proFilter} ORDER BY magnitude ASC`, [], mapRow);
 }
 
 export async function getTrackedObjects(): Promise<TrackedObject[]> {
@@ -254,6 +266,36 @@ export async function updateTrackedObject(
 
 export async function deleteTrackedObject(id: number): Promise<void> {
   await execute('DELETE FROM tracked_objects WHERE id = ?', [id]);
+}
+
+// ============================================================================
+// Entitlement Storage
+// ============================================================================
+
+export async function getEntitlementPayload(): Promise<string | null> {
+  const conn = await getDb();
+  const [results] = await conn.executeSql('SELECT payload FROM entitlements WHERE id = 1', []);
+  if (results.rows.length > 0) {
+    // payload is stored as a base64 string in TEXT column
+    return results.rows.item(0).payload as string;
+  }
+  return null;
+}
+
+export async function saveEntitlementPayload(
+  payloadBase64: string,
+  planType: number,
+  validUntilMs: number | null,
+): Promise<void> {
+  await execute(
+    `INSERT OR REPLACE INTO entitlements (id, payload, plan_type, valid_until_ms, updated_at)
+     VALUES (1, ?, ?, ?, strftime('%s', 'now'))`,
+    [payloadBase64, planType, validUntilMs],
+  );
+}
+
+export async function deleteEntitlement(): Promise<void> {
+  await execute('DELETE FROM entitlements WHERE id = 1', []);
 }
 
 export function clearCache(): void {

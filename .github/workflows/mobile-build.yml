@@ -54,6 +54,12 @@ jobs:
           cp core/target/aarch64-linux-android/release/libfindmystar_core.so \
              mobile/android/app/src/main/jniLibs/arm64-v8a/
 
+      - name: Build catalog database
+        run: |
+          bash scripts/build-catalog.sh db/findmystar.db
+          mkdir -p mobile/android/app/src/main/assets
+          cp db/findmystar.db mobile/android/app/src/main/assets/findmystar.db
+
       - name: Build Android debug APK
         working-directory: mobile/android
         run: |
@@ -93,6 +99,12 @@ jobs:
       - name: Build Rust core for iOS simulator
         working-directory: core
         run: cargo build --target aarch64-apple-ios-sim --release
+
+      - name: Build catalog database
+        run: |
+          bash scripts/build-catalog.sh db/findmystar.db
+          mkdir -p mobile/ios/FindMyStar/www
+          cp db/findmystar.db mobile/ios/FindMyStar/www/findmystar.db
 
       - name: Install CocoaPods
         working-directory: mobile/ios

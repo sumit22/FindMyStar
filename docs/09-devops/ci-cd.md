@@ -217,11 +217,15 @@ Enforces code quality before compilation:
 
 ### 3.2 Build Stage
 
-Compiles all project targets:
+Compiles all project targets. The catalog database is built first from `db/schema.sql`
+and `db/seeds/*.sql` via `scripts/build-catalog.sh`, then copied to platform asset
+directories before native builds.
 
 | Target | Tool | Command |
 |--------|------|---------|
-| Rust (host) | cargo | `cargo build --release` |
+| Catalog DB | sqlite3 | `bash scripts/build-catalog.sh db/findmystar.db` |
+| Rust (Android) | cargo | `cargo build --target aarch64-linux-android --release` |
+| Rust (iOS) | cargo | `cargo build --target aarch64-apple-ios --release` |
 | Android APK | Gradle | `./gradlew assembleDebug` |
 | Android AAB | Gradle | `./gradlew bundleRelease` |
 | iOS | xcodebuild | `xcodebuild ... build` |

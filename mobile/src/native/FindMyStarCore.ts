@@ -32,6 +32,20 @@ interface NativeCoreModule {
     lon: number,
     startUnixMs: number,
   ): Promise<{ status: number; riseMs: number; setMs: number }>;
+  computeTrackingRaDec(
+    ra: number,
+    dec: number,
+    lat: number,
+    lon: number,
+    unixMs: number,
+  ): Promise<{ altitude: number; azimuth: number; dirX: number; dirY: number; dirZ: number }>;
+  computeRiseSetRaDec(
+    ra: number,
+    dec: number,
+    lat: number,
+    lon: number,
+    startUnixMs: number,
+  ): Promise<{ status: number; riseMs: number; setMs: number }>;
   altAzToVector3(altitude: number, azimuth: number): Promise<{ x: number; y: number; z: number }>;
   angularDistance(
     x1: number,
@@ -42,10 +56,19 @@ interface NativeCoreModule {
     z2: number,
   ): Promise<number>;
   classifyTwilight(sunAltitude: number): Promise<number>;
+  createEntitlement(planType: number, validUntilMs: number, deviceId: string): Promise<string>;
+  checkEntitlement(payloadBase64: string, deviceId: string, nowMs: number): Promise<number>;
   coreVersion(): Promise<string>;
 }
 
 const NativeCore: NativeCoreModule = NativeModules.FindMyStarCore;
+
+if (!NativeCore) {
+  throw new Error(
+    'FindMyStarCore native module is not available. ' +
+      'Ensure libfindmystar_core.so is included in jniLibs and the app was rebuilt.',
+  );
+}
 
 // Object type constants matching core ObjectType enum
 export const ObjectType = {
@@ -69,6 +92,21 @@ export const RiseSetStatus = {
   RisesAndSets: 0,
   AlwaysVisible: 1,
   NeverVisible: 2,
+} as const;
+
+// Entitlement plan types
+export const PlanType = {
+  Free: 0,
+  Lifetime: 1,
+  Subscription: 2,
+} as const;
+
+// Entitlement check result codes
+export const EntitlementStatus = {
+  ProActive: 1,
+  NotPro: 0,
+  InvalidSignature: -1,
+  InvalidInput: -2,
 } as const;
 
 export interface Position {
@@ -145,6 +183,36 @@ export async function computeRiseSet(
   };
 }
 
+export async function computeTrackingRaDec(
+  ra: number,
+  dec: number,
+  lat: number,
+  lon: number,
+  unixMs: number,
+): Promise<TrackingResult> {
+  const result = await NativeCore.computeTrackingRaDec(ra, dec, lat, lon, unixMs);
+  return {
+    altitude: result.altitude,
+    azimuth: result.azimuth,
+    direction: { x: result.dirX, y: result.dirY, z: result.dirZ },
+  };
+}
+
+export async function computeRiseSetRaDec(
+  ra: number,
+  dec: number,
+  lat: number,
+  lon: number,
+  startUnixMs: number,
+): Promise<RiseSetResult> {
+  const result = await NativeCore.computeRiseSetRaDec(ra, dec, lat, lon, startUnixMs);
+  return {
+    status: result.status,
+    riseMs: result.status === RiseSetStatus.RisesAndSets ? result.riseMs : null,
+    setMs: result.status === RiseSetStatus.RisesAndSets ? result.setMs : null,
+  };
+}
+
 export async function altAzToVector3(altitude: number, azimuth: number): Promise<Vector3> {
   return NativeCore.altAzToVector3(altitude, azimuth);
 }
@@ -155,6 +223,22 @@ export async function angularDistance(v1: Vector3, v2: Vector3): Promise<number>
 
 export async function classifyTwilight(sunAltitude: number): Promise<number> {
   return NativeCore.classifyTwilight(sunAltitude);
+}
+
+export async function createEntitlement(
+  planType: number,
+  validUntilMs: number,
+  deviceId: string,
+): Promise<string> {
+  return NativeCore.createEntitlement(planType, validUntilMs, deviceId);
+}
+
+export async function checkEntitlement(
+  payloadBase64: string,
+  deviceId: string,
+  nowMs: number,
+): Promise<number> {
+  return NativeCore.checkEntitlement(payloadBase64, deviceId, nowMs);
 }
 
 export async function coreVersion(): Promise<string> {

@@ -12,6 +12,7 @@
 import * as CatalogRepo from '../data/CatalogRepository';
 import * as VisibilityService from './VisibilityService';
 import * as LocationService from './LocationService';
+import * as PermissionService from './PermissionService';
 
 // Notification API - will be bound at initialization
 let scheduleNotification:
@@ -39,6 +40,11 @@ export async function createAlarm(
   objectId: number,
   config?: Partial<CatalogRepo.AlarmConfig>,
 ): Promise<number> {
+  const granted = await PermissionService.ensurePermissions();
+  if (!granted) {
+    throw new Error('Required permissions were not granted');
+  }
+
   const loc = await LocationService.getCurrentLocation();
 
   const fullConfig: CatalogRepo.AlarmConfig = {

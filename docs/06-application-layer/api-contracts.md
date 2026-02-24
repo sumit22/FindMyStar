@@ -41,14 +41,21 @@ The Rust domain engine compiles to a platform-native shared library:
 
 **Platform-specific bridges**:
 
-| Platform | Bridge Mechanism    | Library Format          | Loaded Via                    |
-|----------|---------------------|-------------------------|-------------------------------|
-| Android  | JNI (C ABI)         | `libastronomy_engine.so`| `System.loadLibrary()`        |
-| iOS      | C ABI + Obj-C bridge| `libastronomy_engine.a` | Static link via Xcode project |
+| Platform | Bridge Mechanism    | Library Format              | Loaded Via                    |
+|----------|---------------------|-----------------------------|-------------------------------|
+| Android  | JNI (C ABI)         | `libfindmystar_core.so`     | `System.loadLibrary()`        |
+| iOS      | C ABI + Obj-C bridge| `libfindmystar_core.a`      | Static link via Xcode project |
 
-React Native accesses the native library through a **Native Module** that wraps the
-C-ABI calls in platform-specific code (Kotlin on Android, Swift/Obj-C on iOS) and
-exposes them to JavaScript via the React Native bridge.
+React Native accesses the native library through a **Native Module** (`FindMyStarCore`)
+that wraps the C-ABI calls in platform-specific code (Kotlin on Android, Swift/Obj-C on
+iOS) and exposes them to JavaScript via the React Native bridge.
+
+**Two computation paths**:
+
+| Path | Used For | Coordinates | FFI Functions |
+|------|----------|-------------|---------------|
+| Engine path | Sun, Moon, Planets | Computed at runtime by ephemeris | `computeTracking`, `computeRiseSet` (objectType/objectId) |
+| RA/Dec path | Stars, Deep-sky | Fixed J2000 from database | `computeTrackingRaDec`, `computeRiseSetRaDec` (ra/dec) |
 
 ---
 
@@ -76,101 +83,73 @@ Timestamps as `i64` are safe because Unix milliseconds through year 2100 fit wit
 ## 3. Shared C-Compatible Structs
 
 All structs passed across the FFI boundary use `#[repr(C)]` for deterministic layout.
+Defined in `core/src/ffi/exports.rs`.
 
-### 3.1 AltAz
+### 3.1 FfiAltAz
 
 ```rust
 /// Horizontal coordinate result
 #[repr(C)]
-pub struct AltAz {
+pub struct FfiAltAz {
     pub altitude: f64,    // Degrees, -90 to +90
     pub azimuth: f64,     // Degrees, 0 to 360 (N=0, E=90, S=180, W=270)
-    pub visible: i32,     // 1 if altitude > 0, 0 otherwise
+    pub error_code: i32,  // 0 = success, -1 = invalid input
 }
 ```
 
-### 3.2 Vector3
+### 3.2 FfiTrackingResult
 
 ```rust
-/// 3D unit vector in Earth-local frame (X=East, Y=Up, Z=North)
+/// Device tracking direction result (quaternion-to-target)
 #[repr(C)]
-pub struct Vector3 {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
+pub struct FfiTrackingResult {
+    pub direction_deg: f64,   // Direction in degrees
+    pub distance_deg: f64,    // Angular distance to target (degrees)
+    pub error_code: i32,      // 0 = success
 }
 ```
 
-### 3.3 Quaternion
+### 3.3 FfiObjectTrackingResult
 
 ```rust
-/// Unit quaternion representing 3D rotation
+/// Object tracking result: altitude, azimuth, and direction vector.
+/// Used by both engine path (computeTracking) and RA/Dec path (computeTrackingRaDec).
 #[repr(C)]
-pub struct Quaternion {
-    pub w: f64,
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
+pub struct FfiObjectTrackingResult {
+    pub altitude: f64,    // Degrees, -90 to +90
+    pub azimuth: f64,     // Degrees, 0 to 360
+    pub dir_x: f64,       // Direction vector X (East)
+    pub dir_y: f64,       // Direction vector Y (Up)
+    pub dir_z: f64,       // Direction vector Z (North)
+    pub error_code: i32,  // 0 = success, -1 = invalid input, -2 = not found
 }
 ```
 
-### 3.4 RiseSetResult
+### 3.4 FfiRiseSetResult
 
 ```rust
 /// Rise/set computation result
 #[repr(C)]
-pub struct RiseSetResult {
-    pub rise_time_ms: i64,     // Unix ms, or -1 if N/A
-    pub set_time_ms: i64,      // Unix ms, or -1 if N/A
-    pub transit_time_ms: i64,  // Unix ms (time of max altitude)
-    pub max_altitude: f64,     // Degrees at transit
-    pub status: i32,           // 0 = normal, 1 = circumpolar, 2 = never_visible
+pub struct FfiRiseSetResult {
+    pub rise_ms: f64,     // Rise time as Unix ms (0.0 if N/A)
+    pub set_ms: f64,      // Set time as Unix ms (0.0 if N/A)
+    pub status: i32,      // 0 = rises/sets, 1 = always visible, 2 = never visible, -1 = error
 }
 ```
 
-### 3.5 TrackingResult
+### 3.5 Error Codes
 
 ```rust
-/// Single frame of tracking computation
-#[repr(C)]
-pub struct TrackingResult {
-    pub direction_x: f64,    // Relative direction vector (camera frame)
-    pub direction_y: f64,
-    pub direction_z: f64,
-    pub angle_error: f64,    // Angular distance to target (degrees)
-    pub locked: i32,         // 1 if angle_error < lock_threshold
-    pub altitude: f64,       // Current target altitude (degrees)
-    pub azimuth: f64,        // Current target azimuth (degrees)
-}
+const OK: i32 = 0;
+const ERR_INVALID_INPUT: i32 = -1;
+const ERR_NOT_FOUND: i32 = -2;
 ```
 
-### 3.6 SearchResults
+### 3.6 Object Type Constants
 
 ```rust
-/// Heap-allocated search result buffer
-#[repr(C)]
-pub struct SearchResults {
-    pub count: i32,
-    pub ids: *mut i32,       // Array of object IDs
-    pub names: *mut *mut c_char, // Array of name strings
-    pub magnitudes: *mut f64,    // Array of magnitudes
-}
-```
-
-### 3.7 ErrorCode Enum
-
-```rust
-/// Error codes returned by FFI functions
-#[repr(C)]
-pub enum ErrorCode {
-    Success = 0,
-    InvalidCoordinates = 1,
-    ObjectNotFound = 2,
-    ComputationOverflow = 3,
-    EphemerisOutOfRange = 4,
-    InvalidQuaternion = 5,
-    InternalError = 99,
-}
+// ObjectType enum used by engine-path functions
+// 0 = Sun, 1 = Moon, 2 = Planet (object_id = planet_id 1-7), 3 = Star (object_id = hip_id)
 ```
 
 ---
@@ -178,6 +157,7 @@ pub enum ErrorCode {
 ## 4. Core Exported Functions
 
 All exported functions use `extern "C"` linkage and `#[no_mangle]` for symbol stability.
+Defined in `core/src/ffi/exports.rs`.
 
 ### 4.1 Coordinate Transformation
 
@@ -185,228 +165,198 @@ All exported functions use `extern "C"` linkage and `#[no_mangle]` for symbol st
 /// Convert equatorial coordinates (RA/Dec) to horizontal coordinates (Alt/Az).
 ///
 /// Parameters:
-///   ra       - Right Ascension in hours (0.0 to 24.0)
-///   dec      - Declination in degrees (-90.0 to +90.0)
-///   lat      - Observer latitude in degrees (-90.0 to +90.0)
-///   lon      - Observer longitude in degrees (-180.0 to +180.0)
-///   time_ms  - Current time as Unix milliseconds
+///   ra_hours  - Right Ascension in hours (0.0 to 24.0)
+///   dec_deg   - Declination in degrees (-90.0 to +90.0)
+///   lat_deg   - Observer latitude in degrees
+///   lon_deg   - Observer longitude in degrees
+///   unix_ms   - Current time as Unix milliseconds (f64)
 ///
-/// Returns: AltAz struct with altitude, azimuth, and visibility flag.
-///
-/// Thread safety: Safe to call from any thread (pure function, no global state).
+/// Returns: FfiAltAz struct with altitude, azimuth, and error_code.
+/// Thread safety: Safe to call from any thread (pure function).
 #[no_mangle]
-pub extern "C" fn ra_dec_to_altaz(
-    ra: f64,
-    dec: f64,
-    lat: f64,
-    lon: f64,
-    time_ms: i64,
-) -> AltAz
+pub extern "C" fn ffi_ra_dec_to_altaz(
+    ra_hours: f64, dec_deg: f64, lat_deg: f64, lon_deg: f64, unix_ms: f64,
+) -> FfiAltAz
 ```
 
-### 4.2 Tracking Direction
+### 4.2 Position Computation
 
 ```rust
-/// Compute the direction and angular error between the device pointing direction
-/// and a celestial target. Used by the real-time tracking loop at 30+ Hz.
+/// Compute RA/Dec of a celestial object using the ephemeris engine.
+/// object_type: 0=Sun, 1=Moon, 2=Planet, 3=Star
+/// object_id: planet_id (1-7) or hip_id for stars
+/// Returns 0 on success, -1 on invalid input, -2 on not found.
+#[no_mangle]
+pub extern "C" fn ffi_compute_position(
+    object_type: i32, object_id: u32, unix_ms: f64,
+    out_ra: *mut f64, out_dec: *mut f64,
+) -> i32
+```
+
+### 4.3 Object Tracking — Engine Path
+
+```rust
+/// Compute alt/az/direction for an engine-path object (Sun/Moon/Planet/Star by ID).
+/// Internally calls compute_position → ra_dec_to_altaz → altaz_to_vector3.
 ///
-/// Parameters:
-///   ra, dec       - Target equatorial coordinates
-///   lat, lon      - Observer location
-///   time_ms       - Current time as Unix milliseconds
-///   q_w, q_x, q_y, q_z - Device orientation quaternion (Earth frame)
-///
-/// Returns: TrackingResult with direction vector, angle error, and lock status.
-///
-/// Performance: Must complete in < 2ms.
+/// Returns: FfiObjectTrackingResult with altitude, azimuth, direction vector.
 /// Thread safety: Safe to call from any thread.
 #[no_mangle]
-pub extern "C" fn compute_tracking_direction(
-    ra: f64,
-    dec: f64,
-    lat: f64,
-    lon: f64,
-    time_ms: i64,
-    q_w: f64,
-    q_x: f64,
-    q_y: f64,
-    q_z: f64,
-) -> TrackingResult
+pub extern "C" fn ffi_compute_tracking_object(
+    object_type: i32, object_id: u32,
+    lat_deg: f64, lon_deg: f64, unix_ms: f64,
+) -> FfiObjectTrackingResult
 ```
 
-### 4.3 Rise/Set Computation
+### 4.4 Object Tracking — RA/Dec Path
 
 ```rust
-/// Compute rise, set, and transit times for an object at a given location and date.
-/// Uses analytical solution for fixed stars, iterative scan for planets.
+/// Compute alt/az/direction from raw RA/Dec coordinates.
+/// Used for stars and deep-sky objects whose coordinates come from the database.
+/// Internally calls ra_dec_to_altaz → altaz_to_vector3.
 ///
-/// Parameters:
-///   object_id - Catalog ID (used for planet ephemeris lookup)
-///   ra, dec   - Equatorial coordinates (ignored for planets, engine uses ephemeris)
-///   lat, lon  - Observer location
-///   time_ms   - Reference time (midnight of the target date)
-///
-/// Returns: RiseSetResult with times and status flag.
-///
-/// Performance: < 100ms for stars, < 500ms for planets (iterative scan).
+/// Returns: FfiObjectTrackingResult (always succeeds, error_code = 0).
 /// Thread safety: Safe to call from any thread.
 #[no_mangle]
-pub extern "C" fn compute_rise_set(
-    object_id: i32,
-    ra: f64,
-    dec: f64,
-    lat: f64,
-    lon: f64,
-    time_ms: i64,
-) -> RiseSetResult
+pub extern "C" fn ffi_compute_tracking_radec(
+    ra_hours: f64, dec_deg: f64,
+    lat_deg: f64, lon_deg: f64, unix_ms: f64,
+) -> FfiObjectTrackingResult
 ```
 
-### 4.4 Catalog Search
+### 4.5 Rise/Set — RA/Dec Path
 
 ```rust
-/// Search the bundled celestial object catalog by name substring.
-/// Returns a heap-allocated SearchResults struct that MUST be freed
-/// by calling free_search_results().
+/// Compute rise/set times for fixed-coordinate objects (stars, deep-sky).
+/// Uses analytical solution based on the hour-angle formula.
 ///
-/// Parameters:
-///   query_ptr - Pointer to UTF-8 query string
-///   query_len - Length of query string in bytes (not null-terminated)
-///   max_results - Maximum number of results to return
-///
-/// Returns: Pointer to heap-allocated SearchResults, or null on error.
-///
-/// Memory: Caller MUST call free_search_results() when done.
-/// Thread safety: Safe to call from any thread (read-only catalog).
-#[no_mangle]
-pub extern "C" fn search_catalog(
-    query_ptr: *const u8,
-    query_len: i32,
-    max_results: i32,
-) -> *mut SearchResults
-```
-
-### 4.5 Angular Error
-
-```rust
-/// Compute the angular distance between a target vector and device orientation.
-///
-/// Parameters:
-///   target_x, target_y, target_z - Target direction (Earth-local unit vector)
-///   q_w, q_x, q_y, q_z          - Device orientation quaternion
-///
-/// Returns: Angular error in degrees (0.0 to 180.0), or -1.0 on error.
-///
+/// Returns: FfiRiseSetResult with status (0=rises/sets, 1=always, 2=never).
 /// Thread safety: Safe to call from any thread.
 #[no_mangle]
-pub extern "C" fn compute_angular_error(
-    target_x: f64,
-    target_y: f64,
-    target_z: f64,
-    q_w: f64,
-    q_x: f64,
-    q_y: f64,
-    q_z: f64,
+pub extern "C" fn ffi_compute_rise_set(
+    ra_hours: f64, dec_deg: f64,
+    lat_deg: f64, lon_deg: f64, start_unix_ms: f64,
+) -> FfiRiseSetResult
+```
+
+### 4.6 Rise/Set — Engine Path
+
+```rust
+/// Compute rise/set times for engine-path objects (Sun/Moon/Planet/Star by ID).
+/// Internally calls compute_position to get RA/Dec, then compute_rise_set_analytical.
+///
+/// Returns: FfiRiseSetResult with status.
+/// Thread safety: Safe to call from any thread.
+#[no_mangle]
+pub extern "C" fn ffi_compute_rise_set_object(
+    object_type: i32, object_id: u32,
+    lat_deg: f64, lon_deg: f64, start_unix_ms: f64,
+) -> FfiRiseSetResult
+```
+
+### 4.7 Device Tracking Direction
+
+```rust
+/// Compute direction from device quaternion to a target vector.
+/// Used by the AR tracking loop for arrow guidance.
+#[no_mangle]
+pub extern "C" fn ffi_compute_tracking(
+    target_x: f64, target_y: f64, target_z: f64,
+    qw: f64, qx: f64, qy: f64, qz: f64,
+) -> FfiTrackingResult
+```
+
+### 4.8 Utility Functions
+
+```rust
+/// Convert altitude/azimuth to a unit vector in East-Up-North frame.
+/// Results returned via out-pointers.
+#[no_mangle]
+pub extern "C" fn ffi_altaz_to_vector3(
+    alt_deg: f64, az_deg: f64,
+    out_x: *mut f64, out_y: *mut f64, out_z: *mut f64,
+) -> i32
+
+/// Angular distance in degrees between two unit vectors.
+#[no_mangle]
+pub extern "C" fn ffi_angular_distance(
+    x1: f64, y1: f64, z1: f64, x2: f64, y2: f64, z2: f64,
 ) -> f64
+
+/// Twilight classification: 0=Day, 1=Civil, 2=Nautical, 3=Astronomical, 4=Night
+#[no_mangle]
+pub extern "C" fn ffi_classify_twilight(sun_alt_deg: f64) -> i32
 ```
 
-### 4.6 Memory Management
-
-```rust
-/// Free a SearchResults struct allocated by search_catalog().
-/// Passing a null pointer is a safe no-op.
-#[no_mangle]
-pub extern "C" fn free_search_results(ptr: *mut SearchResults)
-
-/// Free a string allocated by the Rust engine (e.g., from get_last_error).
-/// Passing a null pointer is a safe no-op.
-#[no_mangle]
-pub extern "C" fn free_string(ptr: *mut c_char)
-```
-
-### 4.7 Diagnostics
+### 4.9 Diagnostics
 
 ```rust
 /// Return the version string of the Rust core engine.
-/// Caller MUST free the returned string with free_string().
-///
-/// Returns: Pointer to a null-terminated UTF-8 version string (e.g., "1.0.0").
+/// Returns a pointer to a static C string (do not free).
 #[no_mangle]
-pub extern "C" fn core_version() -> *mut c_char
-
-/// Return the last error message from the Rust engine.
-/// Returns null if no error has occurred since the last call.
-/// Caller MUST free the returned string with free_string().
-///
-/// Thread safety: Uses thread-local storage; each thread has its own error.
-#[no_mangle]
-pub extern "C" fn get_last_error() -> *mut c_char
+pub extern "C" fn ffi_core_version() -> *const u8
 ```
 
 ---
 
 ## 5. Android JNI Integration
 
-On Android, the Rust library is compiled as a shared object (`libastronomy_engine.so`)
-for each ABI target (arm64-v8a, armeabi-v7a, x86_64).
+On Android, the Rust library is compiled as a shared object (`libfindmystar_core.so`)
+and placed in `jniLibs/arm64-v8a/` (or other ABI directories).
 
-### Kotlin JNI Declarations
+### Kotlin Native Module
+
+The module is defined in `AstronomyBridgeModule.kt` under `com.findmystar`:
 
 ```kotlin
-package com.findmystar.engine
+package com.findmystar
 
-object AstronomyEngine {
-    init {
-        System.loadLibrary("astronomy_engine")
+class AstronomyBridgeModule(reactContext: ReactApplicationContext) :
+    ReactContextBaseJavaModule(reactContext) {
+
+    companion object {
+        init { System.loadLibrary("findmystar_core") }
     }
 
-    // Coordinate transformation
-    external fun raDecToAltaz(
-        ra: Double, dec: Double, lat: Double, lon: Double, timeMs: Long
-    ): DoubleArray  // [altitude, azimuth, visible]
+    override fun getName() = "FindMyStarCore"
 
-    // Tracking direction
-    external fun computeTrackingDirection(
-        ra: Double, dec: Double, lat: Double, lon: Double, timeMs: Long,
-        qW: Double, qX: Double, qY: Double, qZ: Double
-    ): DoubleArray  // [dirX, dirY, dirZ, angleError, locked, altitude, azimuth]
+    // JNI declarations — engine path (objectType/objectId)
+    private external fun nativeComputeTracking(objectType: Int, objectId: Int,
+        lat: Double, lon: Double, unixMs: Double): DoubleArray  // [alt, az, dirX, dirY, dirZ]
+    private external fun nativeComputeRiseSet(objectType: Int, objectId: Int,
+        lat: Double, lon: Double, startMs: Double): DoubleArray  // [status, riseMs, setMs]
 
-    // Rise/set times
-    external fun computeRiseSet(
-        objectId: Int, ra: Double, dec: Double,
-        lat: Double, lon: Double, timeMs: Long
-    ): LongArray  // [riseMs, setMs, transitMs, maxAlt*1000, status]
+    // JNI declarations — RA/Dec path (raw coordinates from database)
+    private external fun nativeComputeTrackingRaDec(ra: Double, dec: Double,
+        lat: Double, lon: Double, unixMs: Double): DoubleArray  // [alt, az, dirX, dirY, dirZ]
+    private external fun nativeComputeRiseSetRaDec(ra: Double, dec: Double,
+        lat: Double, lon: Double, startMs: Double): DoubleArray  // [status, riseMs, setMs]
 
-    // Version
-    external fun coreVersion(): String
+    // Utility JNI declarations
+    private external fun nativeRaDecToAltAz(ra: Double, dec: Double,
+        lat: Double, lon: Double, unixMs: Double): DoubleArray
+    private external fun nativeComputePosition(objectType: Int, objectId: Int,
+        jd: Double): DoubleArray
+    private external fun nativeAltAzToVector3(alt: Double, az: Double): DoubleArray
+    private external fun nativeAngularDistance(x1: Double, y1: Double, z1: Double,
+        x2: Double, y2: Double, z2: Double): Double
+    private external fun nativeClassifyTwilight(sunAlt: Double): Int
+    private external fun nativeCoreVersion(): String
 
-    // Error
-    external fun getLastError(): String?
-}
-```
-
-### React Native Native Module (Android)
-
-```kotlin
-@ReactModule(name = "AstronomyBridge")
-class AstronomyBridgeModule(reactContext: ReactApplicationContext)
-    : ReactContextBaseJavaModule(reactContext) {
-
-    override fun getName() = "AstronomyBridge"
-
+    // @ReactMethod wrappers expose each JNI function to React Native with Promise-based API
     @ReactMethod
-    fun raDecToAltaz(ra: Double, dec: Double, lat: Double, lon: Double,
-                     timeMs: Double, promise: Promise) {
-        try {
-            val result = AstronomyEngine.raDecToAltaz(ra, dec, lat, lon, timeMs.toLong())
-            val map = Arguments.createMap()
-            map.putDouble("altitude", result[0])
-            map.putDouble("azimuth", result[1])
-            map.putBoolean("visible", result[2] > 0.5)
-            promise.resolve(map)
-        } catch (e: Exception) {
-            promise.reject("ENGINE_ERROR", e.message)
-        }
+    fun computeTracking(objectType: Int, objectId: Int, lat: Double, lon: Double,
+                        unixMs: Double, promise: Promise) {
+        val result = nativeComputeTracking(objectType, objectId, lat, lon, unixMs)
+        val map = Arguments.createMap()
+        map.putDouble("altitude", result[0])
+        map.putDouble("azimuth", result[1])
+        map.putDouble("dirX", result[2])
+        map.putDouble("dirY", result[3])
+        map.putDouble("dirZ", result[4])
+        promise.resolve(map)
     }
+    // ... (similar pattern for all other methods)
 }
 ```
 
@@ -414,178 +364,177 @@ class AstronomyBridgeModule(reactContext: ReactApplicationContext)
 
 ## 6. iOS Bridge Integration
 
-On iOS, the Rust library is compiled as a static library (`libastronomy_engine.a`)
-for arm64 (device) and x86_64 (simulator).
+On iOS, the Rust library is compiled as a static library (`libfindmystar_core.a`)
+for arm64 (device) and arm64-sim (Apple Silicon simulator).
 
-### Objective-C Bridging Header
+### Bridging Header
 
-```objc
-// FindMyStar-Bridging-Header.h
+`FindMyStar-Bridging-Header.h` declares all C FFI structs and functions:
 
-#ifndef astronomy_engine_h
-#define astronomy_engine_h
+```c
+#ifndef findmystar_bridging_header_h
+#define findmystar_bridging_header_h
 
 #include <stdint.h>
 
+typedef struct { double altitude; double azimuth; int32_t error_code; } FfiAltAz;
+typedef struct { double direction_deg; double distance_deg; int32_t error_code; } FfiTrackingResult;
+typedef struct { double rise_ms; double set_ms; int32_t status; } FfiRiseSetResult;
 typedef struct {
-    double altitude;
-    double azimuth;
-    int32_t visible;
-} AltAz;
+    double altitude; double azimuth;
+    double dir_x; double dir_y; double dir_z;
+    int32_t error_code;
+} FfiObjectTrackingResult;
 
-typedef struct {
-    double direction_x, direction_y, direction_z;
-    double angle_error;
-    int32_t locked;
-    double altitude, azimuth;
-} TrackingResult;
+FfiAltAz ffi_ra_dec_to_altaz(double ra_hours, double dec_deg, double lat_deg, double lon_deg, double unix_ms);
+int32_t ffi_compute_position(int32_t object_type, uint32_t object_id, double unix_ms, double *out_ra, double *out_dec);
 
-typedef struct {
-    int64_t rise_time_ms, set_time_ms, transit_time_ms;
-    double max_altitude;
-    int32_t status;
-} RiseSetResult;
+// Engine path (objectType/objectId)
+FfiObjectTrackingResult ffi_compute_tracking_object(int32_t object_type, uint32_t object_id,
+    double lat_deg, double lon_deg, double unix_ms);
+FfiRiseSetResult ffi_compute_rise_set_object(int32_t object_type, uint32_t object_id,
+    double lat_deg, double lon_deg, double start_unix_ms);
 
-AltAz ra_dec_to_altaz(double ra, double dec, double lat, double lon, int64_t time_ms);
-TrackingResult compute_tracking_direction(
-    double ra, double dec, double lat, double lon, int64_t time_ms,
-    double q_w, double q_x, double q_y, double q_z);
-RiseSetResult compute_rise_set(
-    int32_t object_id, double ra, double dec,
-    double lat, double lon, int64_t time_ms);
-double compute_angular_error(
-    double target_x, double target_y, double target_z,
-    double q_w, double q_x, double q_y, double q_z);
-char* core_version(void);
-char* get_last_error(void);
-void free_string(char* ptr);
+// RA/Dec path (raw coordinates from database)
+FfiObjectTrackingResult ffi_compute_tracking_radec(double ra_hours, double dec_deg,
+    double lat_deg, double lon_deg, double unix_ms);
+FfiRiseSetResult ffi_compute_rise_set(double ra_hours, double dec_deg,
+    double lat_deg, double lon_deg, double start_unix_ms);
+
+// Utilities
+int32_t ffi_altaz_to_vector3(double alt_deg, double az_deg, double *out_x, double *out_y, double *out_z);
+double ffi_angular_distance(double x1, double y1, double z1, double x2, double y2, double z2);
+int32_t ffi_classify_twilight(double sun_alt_deg);
+const char* ffi_core_version(void);
 
 #endif
 ```
 
 ### Swift Wrapper (React Native Native Module)
 
+The Swift wrapper (`AstronomyBridge.swift`) mirrors the Kotlin module:
+
 ```swift
-@objc(AstronomyBridge)
+@objc(FindMyStarCore)
 class AstronomyBridge: NSObject {
-    @objc func raDecToAltaz(_ ra: Double, dec: Double, lat: Double,
-                            lon: Double, timeMs: Double,
-                            resolve: @escaping RCTPromiseResolveBlock,
-                            reject: @escaping RCTPromiseRejectBlock) {
-        let result = ra_dec_to_altaz(ra, dec, lat, lon, Int64(timeMs))
-        resolve([
-            "altitude": result.altitude,
-            "azimuth": result.azimuth,
-            "visible": result.visible != 0
-        ])
+    @objc static func requiresMainQueueSetup() -> Bool { false }
+
+    // Engine path: objectType/objectId → alt/az/direction
+    @objc func computeTracking(_ objectType: Int, objectId: Int,
+                                lat: Double, lon: Double, unixMs: Double,
+                                resolve: @escaping RCTPromiseResolveBlock,
+                                reject: @escaping RCTPromiseRejectBlock) {
+        let result = ffi_compute_tracking_object(Int32(objectType), UInt32(objectId), lat, lon, unixMs)
+        if result.error_code == 0 {
+            resolve(["altitude": result.altitude, "azimuth": result.azimuth,
+                     "dirX": result.dir_x, "dirY": result.dir_y, "dirZ": result.dir_z])
+        } else {
+            reject("CORE_ERROR", "compute_tracking_object failed", nil)
+        }
     }
+
+    // RA/Dec path: raw coordinates → alt/az/direction
+    @objc func computeTrackingRaDec(_ ra: Double, dec: Double,
+                                     lat: Double, lon: Double, unixMs: Double,
+                                     resolve: @escaping RCTPromiseResolveBlock,
+                                     reject: @escaping RCTPromiseRejectBlock) {
+        let result = ffi_compute_tracking_radec(ra, dec, lat, lon, unixMs)
+        resolve(["altitude": result.altitude, "azimuth": result.azimuth,
+                 "dirX": result.dir_x, "dirY": result.dir_y, "dirZ": result.dir_z])
+    }
+    // ... (similar pattern for computeRiseSet, computeRiseSetRaDec, etc.)
 }
+```
+
+### Objective-C Module Registration
+
+`AstronomyBridge.m` registers methods with the React Native bridge:
+
+```objc
+@interface RCT_EXTERN_MODULE(FindMyStarCore, NSObject)
+RCT_EXTERN_METHOD(computeTracking:(NSInteger)objectType objectId:(NSInteger)objectId ...)
+RCT_EXTERN_METHOD(computeTrackingRaDec:(double)ra dec:(double)dec ...)
+RCT_EXTERN_METHOD(computeRiseSet:(NSInteger)objectType objectId:(NSInteger)objectId ...)
+RCT_EXTERN_METHOD(computeRiseSetRaDec:(double)ra dec:(double)dec ...)
+// ... (all methods registered)
+@end
 ```
 
 ---
 
 ## 7. Error Handling Protocol
 
-### Rust Side: Panic Containment
+### Rust Side: Error Codes
 
-All exported functions wrap their implementation in `catch_unwind` to prevent Rust
-panics from unwinding across the FFI boundary (which is undefined behavior):
+FFI functions signal errors via `error_code` fields in return structs or integer
+return values. The Rust crate is compiled with `panic = "abort"` so panics terminate
+the process rather than unwinding across the FFI boundary.
 
-```rust
-#[no_mangle]
-pub extern "C" fn ra_dec_to_altaz(
-    ra: f64, dec: f64, lat: f64, lon: f64, time_ms: i64
-) -> AltAz {
-    let result = std::panic::catch_unwind(|| {
-        // Validate inputs
-        if ra < 0.0 || ra > 24.0 { return Err(ErrorCode::InvalidCoordinates); }
-        if dec < -90.0 || dec > 90.0 { return Err(ErrorCode::InvalidCoordinates); }
+### Error Code Convention
 
-        // Compute
-        let (alt, az) = internal::ra_dec_to_altaz_impl(ra, dec, lat, lon, time_ms);
-        Ok(AltAz { altitude: alt, azimuth: az, visible: if alt > 0.0 { 1 } else { 0 } })
-    });
+| Code | Constant | Meaning |
+|------|----------|---------|
+| `0` | `OK` | Success |
+| `-1` | `ERR_INVALID_INPUT` | Invalid object type or parameters |
+| `-2` | `ERR_NOT_FOUND` | Object not found in ephemeris engine |
 
-    match result {
-        Ok(Ok(altaz)) => altaz,
-        Ok(Err(code)) => {
-            set_last_error(format!("Invalid input: error code {}", code as i32));
-            AltAz { altitude: 0.0, azimuth: 0.0, visible: 0 } // sentinel
-        }
-        Err(_) => {
-            set_last_error("Internal panic in ra_dec_to_altaz".to_string());
-            AltAz { altitude: 0.0, azimuth: 0.0, visible: 0 } // sentinel
-        }
-    }
-}
-```
+### Error Indicators by Function
 
-### Sentinel Values
-
-Functions that return structs use sentinel values on error:
-
-| Function                      | Sentinel                               | Meaning          |
-|-------------------------------|----------------------------------------|------------------|
-| `ra_dec_to_altaz`             | `altitude=0, azimuth=0, visible=0`     | Computation failed|
-| `compute_tracking_direction`  | `angle_error=-1.0`                     | Computation failed|
-| `compute_rise_set`            | `status=-1`                            | Computation failed|
-| `compute_angular_error`       | `-1.0`                                 | Computation failed|
+| Function | Error Indicator |
+|----------|----------------|
+| `ffi_compute_tracking_object` | `error_code != 0`, altitude/azimuth = NaN |
+| `ffi_compute_tracking_radec` | Always succeeds (error_code = 0) |
+| `ffi_compute_rise_set_object` | `status = -1` or `-2` |
+| `ffi_compute_rise_set` | Always succeeds (status = 0, 1, or 2) |
+| `ffi_compute_position` | Return value != 0 |
 
 ### TypeScript Side: Error Detection
 
 ```typescript
-// TypeScript wrapper checks for sentinel values
-async function raDecToAltaz(ra: number, dec: number, lat: number,
-                             lon: number, timeMs: number): Promise<AltAz> {
-  const result = await NativeModules.AstronomyBridge.raDecToAltaz(
-    ra, dec, lat, lon, timeMs
-  );
-
-  if (result.altitude === 0 && result.azimuth === 0 && !result.visible) {
-    const error = await NativeModules.AstronomyBridge.getLastError();
-    throw new FFIComputationError(error ?? 'Unknown FFI error');
-  }
-
-  return result;
-}
+// The TypeScript wrapper checks error_code in the native module response.
+// Engine-path functions may fail if the object is not found in the ephemeris;
+// RA/Dec-path functions always succeed since coordinates come from the database.
+const result = await NativeCore.computeTracking(objectType, objectId, lat, lon, unixMs);
+// NaN altitude indicates an error from the engine path
+if (isNaN(result.altitude)) { /* handle error */ }
 ```
 
 ---
 
 ## 8. Memory Ownership Rules
 
-| Resource         | Allocated By    | Freed By           | Function              |
-|------------------|-----------------|--------------------|-----------------------|
-| `SearchResults`  | Rust (`search_catalog`) | Caller via `free_search_results` | `free_search_results(ptr)` |
-| Version string   | Rust (`core_version`)   | Caller via `free_string`         | `free_string(ptr)`         |
-| Error string     | Rust (`get_last_error`) | Caller via `free_string`         | `free_string(ptr)`         |
-| `AltAz`          | Stack (return value)    | Automatic          | N/A (value type)      |
-| `TrackingResult`  | Stack (return value)   | Automatic          | N/A (value type)      |
-| `RiseSetResult`   | Stack (return value)   | Automatic          | N/A (value type)      |
+| Resource | Allocated By | Freed By | Notes |
+|----------|-------------|----------|-------|
+| `FfiAltAz` | Stack (return value) | Automatic | Value type, no heap allocation |
+| `FfiObjectTrackingResult` | Stack (return value) | Automatic | Value type |
+| `FfiRiseSetResult` | Stack (return value) | Automatic | Value type |
+| `FfiTrackingResult` | Stack (return value) | Automatic | Value type |
+| Version string | Static (`ffi_core_version`) | Do not free | Points to static C string |
 
-**Rule**: Any pointer returned by a Rust function must be freed by calling the
-corresponding `free_*` function. Passing a pointer to any other deallocation function
-(e.g., C `free()`) is undefined behavior.
+All FFI functions return stack-allocated structs or write to caller-provided
+out-pointers. No heap allocations cross the FFI boundary, so no `free_*` functions
+are needed. Catalog search is handled at the TypeScript/SQLite level, not via FFI.
 
 ---
 
 ## 9. Threading Model
 
-| Function                      | Thread Safety       | Notes                          |
-|-------------------------------|---------------------|--------------------------------|
-| `ra_dec_to_altaz`             | Thread-safe         | Pure function, no global state |
-| `compute_tracking_direction`  | Thread-safe         | Pure function, no global state |
-| `compute_rise_set`            | Thread-safe         | Pure function, no global state |
-| `search_catalog`              | Thread-safe         | Read-only catalog access       |
-| `compute_angular_error`       | Thread-safe         | Pure function, no global state |
-| `core_version`                | Thread-safe         | Returns constant               |
-| `get_last_error`              | Thread-local        | Each thread has its own error  |
-| `free_search_results`         | NOT thread-safe     | Must free on same thread       |
-| `free_string`                 | NOT thread-safe     | Must free on same thread       |
+| Function | Thread Safety | Notes |
+|----------|--------------|-------|
+| `ffi_ra_dec_to_altaz` | Thread-safe | Pure function, no global state |
+| `ffi_compute_tracking_object` | Thread-safe | Pure function |
+| `ffi_compute_tracking_radec` | Thread-safe | Pure function |
+| `ffi_compute_rise_set` | Thread-safe | Pure function |
+| `ffi_compute_rise_set_object` | Thread-safe | Pure function |
+| `ffi_compute_position` | Thread-safe | Pure function |
+| `ffi_compute_tracking` | Thread-safe | Pure function |
+| `ffi_angular_distance` | Thread-safe | Pure function |
+| `ffi_classify_twilight` | Thread-safe | Pure function |
+| `ffi_core_version` | Thread-safe | Returns static constant |
 
-**Recommendation**: Call computation functions from any thread. Call free functions
-from the same thread that received the allocation. In practice, the React Native
-bridge serializes calls to the native module thread, so this is handled automatically.
+All FFI functions are pure computations with no global mutable state. They are safe
+to call from any thread. In practice, React Native serializes calls through the
+native module thread.
 
 ---
 
@@ -624,20 +573,20 @@ must agree on the major version number.
 
 ## 11. Performance Constraints
 
-| Aspect                    | Target              | Measured                        |
-|---------------------------|---------------------|---------------------------------|
-| FFI call overhead (JNI)   | < 0.1ms             | ~0.05ms per call (Android)      |
-| FFI call overhead (C ABI) | < 0.05ms            | ~0.02ms per call (iOS)          |
-| `ra_dec_to_altaz`         | < 1ms               | ~0.3ms                          |
-| `compute_tracking_direction` | < 2ms            | ~0.8ms                          |
-| `compute_rise_set` (star) | < 10ms              | ~2ms                            |
-| `compute_rise_set` (planet)| < 100ms            | ~50ms (iterative)               |
-| `search_catalog`          | < 20ms              | ~5ms for typical query          |
-| `compute_angular_error`   | < 0.5ms             | ~0.1ms                          |
+| Aspect | Target | Measured |
+|--------|--------|----------|
+| FFI call overhead (JNI) | < 0.1ms | ~0.05ms per call (Android) |
+| FFI call overhead (C ABI) | < 0.05ms | ~0.02ms per call (iOS) |
+| `ffi_ra_dec_to_altaz` | < 1ms | ~0.3ms |
+| `ffi_compute_tracking_object` | < 2ms | ~1ms |
+| `ffi_compute_tracking_radec` | < 1ms | ~0.5ms (no ephemeris lookup) |
+| `ffi_compute_rise_set` (RA/Dec) | < 10ms | ~2ms (analytical) |
+| `ffi_compute_rise_set_object` | < 10ms | ~3ms (ephemeris + analytical) |
+| `ffi_angular_distance` | < 0.5ms | ~0.1ms |
 
-**Batch optimization**: For bulk operations (e.g., recalculating 50 alarms), consider
-a batch FFI function that processes multiple objects in a single native call to reduce
-JNI/bridge overhead.
+**Note**: RA/Dec path functions are faster than engine-path equivalents since they
+skip the ephemeris lookup step. Catalog search is handled at the SQLite level in
+TypeScript, not via FFI.
 
 ---
 

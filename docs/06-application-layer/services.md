@@ -81,12 +81,19 @@ interface AppError {
 
 ### Responsibility
 
-Orchestrates real-time celestial object tracking. Each tracking cycle:
+Orchestrates real-time celestial object tracking using two computation paths:
+
+- **Engine path** (Sun/Moon/Planets): Positions computed at runtime by the Rust
+  ephemeris engine using `Core.computeTracking(objectType, objectId, ...)`.
+- **RA/Dec path** (Stars/Deep-sky): Fixed J2000 coordinates from the SQLite database
+  passed directly to `Core.computeTrackingRaDec(ra, dec, ...)`.
+
+Each tracking cycle:
 1. Reads the current device orientation from SensorFusionService.
 2. Reads the current location from LocationService.
-3. Calls the Rust FFI bridge to compute the target's Alt/Az and the angular error
-   between the device pointing direction and the target.
-4. Returns a `TrackingResult` to the Presentation Layer for AR rendering.
+3. Calls the appropriate FFI function based on the object type to compute Alt/Az
+   and a direction vector for AR rendering.
+4. Returns a `TrackingResult` to the Presentation Layer.
 
 ### Interface
 
@@ -94,7 +101,8 @@ Orchestrates real-time celestial object tracking. Each tracking cycle:
 export interface IObjectTrackingService {
   /**
    * Initialize tracking for a celestial object.
-   * Loads object data from catalog, validates visibility, starts the tracking loop.
+   * Loads object data from catalog, determines which computation path to use
+   * (engine vs RA/Dec), validates visibility, starts the tracking loop.
    * @param objectId - Catalog ID of the target object.
    * @throws ObjectNotFoundError if objectId is invalid.
    * @throws ObjectBelowHorizonError if the object is currently below 0 degrees altitude.
@@ -140,16 +148,44 @@ interface TrackingResult {
 }
 ```
 
+### Two-Path Routing
+
+```typescript
+// During initialize(), the service determines the computation path:
+function setupTarget(obj: CelestialObject): void {
+  if (obj.type === 'sun' || obj.type === 'moon' || obj.planetId != null) {
+    // Engine path: ephemeris computes position at runtime
+    targetEngineParams = { objectType, objectId };
+    targetRaDec = null;
+  } else {
+    // RA/Dec path: fixed coordinates from database
+    targetEngineParams = null;
+    targetRaDec = { ra: obj.ra!, dec: obj.dec! };
+  }
+}
+
+// In trackingLoop():
+if (targetEngineParams) {
+  result = Core.computeTracking(objectType, objectId, lat, lon, unixMs);
+} else {
+  result = Core.computeTrackingRaDec(ra, dec, lat, lon, unixMs);
+}
+```
+
 ### Dependencies
 
 - `ISensorFusionService` - Device orientation quaternion
 - `ILocationService` - Observer GPS coordinates
 - `ICatalogRepository` - Object lookup by ID
-- Rust FFI bridge (`compute_tracking_direction`) - Core math
+- Rust FFI bridge:
+  - `computeTracking(objectType, objectId, ...)` - Engine path
+  - `computeTrackingRaDec(ra, dec, ...)` - RA/Dec path
 
 ### State
 
 - `targetObject: CelestialObject | null` - Currently tracked object
+- `targetEngineParams: { objectType, objectId } | null` - Engine path params (if applicable)
+- `targetRaDec: { ra, dec } | null` - RA/Dec path params (if applicable)
 - `isTracking: boolean` - Whether the loop is active
 - `lastLocation: Location` - Cached location (updated every 60s during tracking)
 
@@ -182,8 +218,15 @@ interface TrackingResult {
 ### Responsibility
 
 Computes rise/set times, transit times, and visibility windows for celestial objects.
-Delegates all astronomical math to the Rust engine. Handles edge cases such as
-circumpolar objects and objects that never rise at a given latitude.
+Delegates all astronomical math to the Rust engine via two computation paths:
+
+- **Engine path** (Sun/Moon/Planets): `Core.computeRiseSet(objectType, objectId, ...)`
+  and `Core.computeTracking(objectType, objectId, ...)`.
+- **RA/Dec path** (Stars/Deep-sky): `Core.computeRiseSetRaDec(ra, dec, ...)` and
+  `Core.computeTrackingRaDec(ra, dec, ...)`.
+
+Handles edge cases such as circumpolar objects and objects that never rise at a given
+latitude.
 
 ### Interface
 
@@ -249,11 +292,32 @@ interface OptimalViewingResult {
 }
 ```
 
+### Two-Path Routing
+
+```typescript
+function useEnginePath(obj: CelestialObject): boolean {
+  return obj.type === 'sun' || obj.type === 'moon' || obj.planetId != null;
+}
+
+// Internal helpers used by all public methods:
+async function doComputeTracking(obj, lat, lon, unixMs): Promise<TrackingResult> {
+  if (useEnginePath(obj)) return Core.computeTracking(objectType, objectId, ...);
+  return Core.computeTrackingRaDec(obj.ra!, obj.dec!, lat, lon, unixMs);
+}
+
+async function doComputeRiseSet(obj, lat, lon, startMs): Promise<RiseSetResult> {
+  if (useEnginePath(obj)) return Core.computeRiseSet(objectType, objectId, ...);
+  return Core.computeRiseSetRaDec(obj.ra!, obj.dec!, lat, lon, startMs);
+}
+```
+
 ### Dependencies
 
 - `ICatalogRepository` - Object data lookup
 - `ILocationService` - Current observer coordinates
-- Rust FFI bridge (`compute_rise_set`, `ra_dec_to_altaz`) - Astronomical calculations
+- Rust FFI bridge:
+  - `computeTracking` / `computeRiseSet` - Engine path (Sun/Moon/Planets)
+  - `computeTrackingRaDec` / `computeRiseSetRaDec` - RA/Dec path (Stars/Deep-sky)
 
 ### Error Handling
 
