@@ -89,7 +89,7 @@ export default function ObjectInfoScreen(): React.JSX.Element {
           setAltAz(aa);
         }
       } catch {
-        // Position data unavailable
+        // Location or computation error — leave fields at defaults
       }
       if (!cancelled) {
         setLoading(false);

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,10 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { useCatalogStore } from '../store/catalogStore';
 import { useEntitlementStore } from '../store/entitlementStore';
+import * as CatalogRepo from '../data/CatalogRepository';
 import type { CelestialObject } from '../data/CatalogRepository';
+import * as VisibilityService from '../services/VisibilityService';
+import * as LocationService from '../services/LocationService';
 import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -90,6 +93,120 @@ function ResultItem({
   );
 }
 
+interface VisibleObject {
+  obj: CelestialObject;
+  altitude: number;
+  azimuth: number;
+}
+
+function useVisibleNow(): { items: VisibleObject[]; loading: boolean } {
+  const [items, setItems] = useState<VisibleObject[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        const loc = await LocationService.getCurrentLocation();
+        // Get brightest objects (mag ≤ 4.0 covers Sun, Moon, planets, bright stars)
+        const all = await CatalogRepo.getAllObjects();
+        const bright = all.filter(o => o.magnitude <= 4.0).slice(0, 30);
+
+        const visible: VisibleObject[] = [];
+        for (const obj of bright) {
+          if (cancelled) {
+            return;
+          }
+          try {
+            const aa = await VisibilityService.getCurrentAltAz(obj, loc.lat, loc.lon);
+            if (aa.altitude > 0) {
+              visible.push({ obj, altitude: aa.altitude, azimuth: aa.azimuth });
+            }
+          } catch {
+            // skip object on error
+          }
+        }
+
+        if (!cancelled) {
+          // Sort by altitude descending (highest first)
+          visible.sort((a, b) => b.altitude - a.altitude);
+          setItems(visible.slice(0, 5));
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return { items, loading };
+}
+
+function azToCardinal(az: number): string {
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return dirs[Math.round((((az % 360) + 360) % 360) / 45) % 8];
+}
+
+function VisibleNowSection({ onSelect }: { onSelect: (id: number) => void }) {
+  const { colors } = useTheme();
+  const { items, loading } = useVisibleNow();
+
+  if (loading) {
+    return (
+      <View style={styles.visibleSection}>
+        <Text style={[styles.visibleTitle, { color: colors.text }]}>Visible Now</Text>
+        <ActivityIndicator size="small" color={colors.primary} style={styles.visibleLoader} />
+      </View>
+    );
+  }
+
+  if (items.length === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.visibleSection}>
+      <Text style={[styles.visibleTitle, { color: colors.text }]}>Visible Now</Text>
+      {items.map(({ obj, altitude, azimuth }) => {
+        const icon = TYPE_ICONS[obj.type] ?? '\u2022';
+        return (
+          <TouchableOpacity
+            key={obj.id}
+            style={[
+              styles.visibleItem,
+              { backgroundColor: colors.cardBackground, borderColor: colors.border },
+            ]}
+            onPress={() => onSelect(obj.id)}
+            activeOpacity={0.7}>
+            <Text style={[styles.visibleIcon, { color: colors.accent }]}>{icon}</Text>
+            <View style={styles.visibleInfo}>
+              <Text style={[styles.visibleName, { color: colors.text }]} numberOfLines={1}>
+                {obj.commonName ?? obj.name}
+              </Text>
+              <Text style={[styles.visibleDetail, { color: colors.textSecondary }]}>
+                {azToCardinal(azimuth)} {'\u2022'} {altitude.toFixed(0)}
+                {'\u00B0'} above horizon
+              </Text>
+            </View>
+            <Text style={[styles.visibleAlt, { color: colors.success }]}>
+              {altitude.toFixed(0)}
+              {'\u00B0'}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function SearchScreen(): React.JSX.Element {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
@@ -155,15 +272,18 @@ export default function SearchScreen(): React.JSX.Element {
       )}
 
       {!error && searchQuery.length === 0 && (
-        <View style={styles.stateContainer}>
-          <Text style={[styles.emptyIcon, { color: colors.textSecondary }]}>{'\u2605'}</Text>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-            Search for celestial objects by name
-          </Text>
-          <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
-            Try "Sirius", "Jupiter", or "M31"
-          </Text>
-        </View>
+        <>
+          <View style={styles.hintContainer}>
+            <Text style={[styles.emptyIcon, { color: colors.textSecondary }]}>{'\u2605'}</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              Search for celestial objects by name
+            </Text>
+            <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
+              Try "Sirius", "Jupiter", or "M31"
+            </Text>
+          </View>
+          <VisibleNowSection onSelect={handleSelect} />
+        </>
       )}
 
       {!error && searchQuery.length > 0 && !loading && searchResults.length === 0 && (
@@ -209,6 +329,28 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 16, textAlign: 'center' },
   emptyHint: { fontSize: 14, textAlign: 'center', marginTop: 8 },
   errorText: { fontSize: 14, textAlign: 'center' },
+  hintContainer: {
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingTop: 32,
+    paddingBottom: 8,
+  },
+  visibleSection: { paddingHorizontal: 16, paddingBottom: 8 },
+  visibleLoader: { marginTop: 12 },
+  visibleTitle: { fontSize: 18, fontWeight: '700', marginBottom: 10 },
+  visibleItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    marginBottom: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  visibleIcon: { fontSize: 20, width: 32, textAlign: 'center' },
+  visibleInfo: { flex: 1, marginLeft: 8 },
+  visibleName: { fontSize: 15, fontWeight: '600' },
+  visibleDetail: { fontSize: 12, marginTop: 2 },
+  visibleAlt: { fontSize: 14, fontWeight: '700' },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
   resultItem: {
     flexDirection: 'row',
