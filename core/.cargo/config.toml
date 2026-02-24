@@ -1,8 +1,12 @@
-[target.aarch64-linux-android]
-linker = "aarch64-linux-android21-clang"
-
-[target.armv7-linux-androideabi]
-linker = "armv7a-linux-androideabi21-clang"
-
-[target.x86_64-linux-android]
-linker = "x86_64-linux-android21-clang"
+# Android cross-compilation linkers are set via environment variables,
+# not hardcoded paths, so this works on any machine (Windows, macOS, CI).
+#
+# Run: source scripts/setup-ndk-env.sh
+#
+# Or set manually:
+#   export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/<platform>/bin/aarch64-linux-android24-clang"
+#   export CARGO_TARGET_ARMV7_LINUX_ANDROIDEABI_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/<platform>/bin/armv7a-linux-androideabi24-clang"
+#   export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/<platform>/bin/x86_64-linux-android24-clang"
+#
+# <platform>: linux-x86_64, darwin-x86_64, or windows-x86_64 (with .cmd extension)
+# CI sets these automatically via the setup-ndk action output.
