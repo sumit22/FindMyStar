@@ -93,11 +93,20 @@ Each tab maintains its own navigation stack. Pushing a new screen animates from 
 - Apparent magnitude value.
 - Current visibility badge: "Visible" (green), "Below Horizon" (gray), or "Rises at HH:MM" (amber).
 
+**"Visible Now" Section**:
+
+Below the search hints (when no query is entered), the screen displays a **Visible Now** section that lists celestial objects currently above the horizon at the user's location. This gives users immediate targets to track without requiring them to know object names in advance.
+
+- Objects are sorted by altitude (highest first).
+- Each item shows: object name, type label, and current altitude in degrees.
+- Tapping an item navigates directly to the AR tracking screen for that object.
+- The list is computed at mount time using the Rust core's visibility check against the user's GPS coordinates.
+
 **States**:
 
 | State      | Condition                  | Display                                      |
 |------------|----------------------------|----------------------------------------------|
-| Empty      | No query entered           | Prompt text: "Search stars, planets, and more" |
+| Empty      | No query entered           | Hint text + Visible Now section below         |
 | Loading    | Query in progress          | Skeleton loader on result list                |
 | Results    | Matches found              | Scrollable result list                        |
 | No Results | Query returned empty       | "No objects found for '[query]'"              |
@@ -116,21 +125,40 @@ Each tab maintains its own navigation stack. Pushing a new screen animates from 
 
 **Layout**:
 - Full-screen live camera preview (no system UI chrome except status bar).
-- Directional arrow overlay, centered on screen, rotating to point toward the target object.
-- Angular distance badge displayed below the arrow: e.g., "3.2° away".
-- Color coding follows proximity thresholds defined in [SRS FR-6](../02-requirements/srs.md):
+- **Object label**: The target object name displayed at the top center.
+- **Sky Guide overlay**: The primary guidance system, replacing the previous directional arrow. See [Tracking States](./tracking-states.md) for full details.
+- **Viewport center circle**: A fixed ring with center dot at exact screen center, serving as the alignment target. The user's goal is to move the sky guide's target crosshair to overlap with this circle.
+- **Angular distance badge**: Displayed below the viewport center. Shows the angular distance in degrees (e.g., "3.2°"). Background turns green when within 10°.
+- **Back button**: Bottom-left corner, returns to the previous screen.
+- **Target lock indicator**: When angular error falls below 0.5° and is maintained for 2+ seconds (with 1.0° hysteresis for unlock), a "TARGET LOCKED" banner appears. See [SRS FR-7](../02-requirements/srs.md).
+- **Debug overlay** (debug builds only): Frame counter, GPS coordinates, quaternion values, altitude/azimuth, angular distance, and lock state.
 
-| Distance        | Arrow Color | Meaning              |
-|-----------------|-------------|----------------------|
-| > 5°            | Red         | Far from target      |
-| 1° to 5°       | Yellow      | Approaching target   |
-| < 1°           | Green       | Near target          |
+#### Sky Guide System
 
-- **Target lock indicator**: When angular error falls below 0.5° and is maintained for 2 or more seconds, a "TARGET LOCKED" banner appears at the top of the screen with a green background. Optional haptic feedback (single pulse) fires on lock acquisition. See [SRS FR-7](../02-requirements/srs.md).
-- **Object label**: The target object name and type are displayed in a semi-transparent pill at the top-left.
-- **Back button**: Top-left corner, returns to ObjectInfoScreen.
-- **Stop button**: Bottom-center, ends tracking and returns to ObjectInfoScreen.
-- **Debug overlay** (debug builds only): FPS counter, sensor accuracy, and magnetometer heading displayed in a translucent footer.
+The sky guide is an astronomical "plumb line" visualization that gives the user a spatial reference frame for finding objects in the sky. It consists of:
+
+1. **Horizon line**: A thin horizontal line spanning the full screen width, positioned according to the device's tilt. When the phone tilts up, the horizon drops below screen center (as in reality). Labeled "— horizon —".
+
+2. **Azimuth marker (blue diamond)**: A small triangle on the horizon line at the target object's compass bearing. This is the Phase 1 target — the user turns left/right until this marker reaches screen center.
+
+3. **Plumb line (vertical dots)**: A dotted line going straight up from the azimuth marker to the target position. Represents the line from the star normal to Earth's surface. This is the Phase 2 guide — the user tilts up following the dots.
+
+4. **Target crosshair (+)**: A crosshair at the star's exact screen position, at the top of the plumb line. The user's goal is to bring this crosshair to the viewport center circle.
+
+5. **Turn/tilt hints**: When the target is beyond the screen's ~60° field of view, the sky guide switches to a large directional arrow with text (e.g., "◀ Turn left 85°" or "▲ Tilt up 30°") showing exactly how far to rotate the phone.
+
+#### Color Coding
+
+All sky guide elements change color based on proximity to the target:
+
+| Angular Distance | Color   | Meaning              |
+|-----------------|---------|----------------------|
+| > 30°           | Blue    | Far from target      |
+| 10° to 30°     | Yellow  | Getting closer       |
+| 1° to 10°      | Green   | Approaching target   |
+| < 1°           | Bright green | Near target / locked |
+
+The viewport center circle also turns green when within 10°, providing convergent visual feedback from both the guide and the center reference.
 
 **Cross-references**: [SRS FR-4](../02-requirements/srs.md) through [FR-7](../02-requirements/srs.md), [SRS FR-21](../02-requirements/srs.md), [Tracking States](./tracking-states.md)
 

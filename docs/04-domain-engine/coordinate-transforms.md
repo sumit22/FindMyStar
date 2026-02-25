@@ -185,36 +185,79 @@ The output is already normalized by construction. No explicit normalization is n
 
 ## 4. Device Frame Transformation
 
-### 4.1 Quaternion Rotation
+### 4.1 Sensor Fusion World Frame vs. Core Engine Frame
 
-The device's IMU provides an orientation quaternion `Q_device` that represents the rotation from the device's body frame to the world frame (East-Up-North). To determine where the camera is pointing, we extract the forward vector from this quaternion.
+The sensor fusion service (SensorFusionService) produces an orientation quaternion from accelerometer, gyroscope, and magnetometer data using a complementary filter. The quaternion's world frame is **ENU (East-North-Up)**, which is the standard convention for tilt-compensated compass orientation from Euler angles:
 
-To compute where a celestial target appears **in the device's camera view**, we apply the inverse rotation:
+- **X = East** (positive toward geographic East)
+- **Y = North** (positive toward geographic North)
+- **Z = Up** (positive toward zenith)
+
+The Rust core engine uses **EUN (East-Up-North)** for its Vector3 type (see section 1.3):
+
+- **X = East**
+- **Y = Up**
+- **Z = North**
+
+These two frames differ by a swap of the Y and Z axes. **Directly comparing vectors from the sensor fusion with vectors from the core engine produces incorrect angular distances** (typically ~90° off). This is the most critical coordinate mismatch in the system.
+
+### 4.2 Extracting Device Heading and Elevation
+
+Rather than rotating a body-frame vector through the quaternion and mapping between ENU/EUN, the tracking service extracts **heading** and **elevation** as scalar angles from the quaternion. These are frame-independent and verified correct through physical testing.
+
+**Device heading** (compass bearing of the back camera):
+
+The ZYX Euler decomposition of the sensor quaternion gives the yaw angle, which represents the heading of the phone's X axis (right side). When held upright in portrait mode, the back camera (-Z body axis) points 90° counterclockwise from the X axis, so:
 
 ```
-v_device = Q_device^(-1) * v_target * Q_device
+yawRad = atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (q.y² + q.z²))
+deviceHeading = (270 - yawRad * 180 / π + 360) mod 360
 ```
 
-where `v_target` is the target's 3D unit vector in the world frame (from Alt/Az to Vector3), and `v_device` is the target's position relative to the camera.
+Result: degrees clockwise from North (0 = North, 90 = East, 180 = South, 270 = West).
 
-### 4.2 Extracting the Forward Vector
+**Device elevation** (tilt of back camera above horizon):
 
-The camera's forward direction in device space is typically the negative Z-axis `[0, 0, -1]` (pointing out the back of the phone). After rotation by `Q_device`, this becomes the camera's pointing direction in world space:
+The -Z body axis rotated by the sensor quaternion has components `[x_enu, y_enu, z_enu]` in the ENU frame. The Z component (Up in ENU) gives the vertical component of the camera direction:
 
-```rust
-pub fn quaternion_to_forward(q: &Quaternion) -> Vector3 {
-    // Rotate [0, 0, -1] by quaternion Q
-    // Using the rotation formula: v' = Q * v * Q^(-1)
-    // For v = [0, 0, -1], the expanded form is:
-    let x = -2.0 * (q.x * q.z + q.w * q.y);
-    let y = -2.0 * (q.y * q.z - q.w * q.x);
-    let z = -(1.0 - 2.0 * (q.x * q.x + q.y * q.y));
-
-    Vector3 { x, y, z }.normalize()
-}
+```
+upComponent = 2 * (q.x² + q.y²) - 1
+deviceElevation = asin(clamp(upComponent, -1, 1)) * 180 / π
 ```
 
-### 4.3 Target in Device Frame
+Result: degrees above horizon (0 = level, +90 = straight up, -90 = straight down).
+
+### 4.3 Building the Device Direction Vector
+
+To compute angular distance between the device's pointing direction and the target, both vectors must be in the **same coordinate frame** (EUN). Instead of transforming the quaternion output from ENU to EUN (error-prone axis swaps), the device direction is reconstructed from the already-correct heading and elevation using the same `altaz_to_vector3` formula the core engine uses:
+
+```typescript
+const headRad = deviceHeading * Math.PI / 180;
+const elevRad = deviceElevation * Math.PI / 180;
+const deviceDir: Vector3 = {
+  x: Math.cos(elevRad) * Math.sin(headRad),  // East
+  y: Math.sin(elevRad),                       // Up
+  z: Math.cos(elevRad) * Math.cos(headRad),   // North
+};
+```
+
+This guarantees both `deviceDir` and `tracking.direction` (from the Rust core) are in EUN, and `angularDistance(deviceDir, tracking.direction)` produces the correct result.
+
+### 4.4 Why Not Direct Quaternion Rotation?
+
+The naive approach — rotating `[0, 0, -1]` by the quaternion to get a world-frame vector — produces a vector in the **sensor's ENU frame**, not the core's EUN frame:
+
+```
+// This gives ENU, NOT EUN:
+deviceDir_enu = Q * [0, 0, -1] * Q*
+  x = -2*(q.x*q.z + q.w*q.y)   // East  ✓
+  y = -2*(q.y*q.z - q.w*q.x)   // North ✗ (core expects Up)
+  z =  2*(q.x² + q.y²) - 1     // Up    ✗ (core expects North)
+```
+
+Passing this ENU vector to `Core.angularDistance()` alongside the core's EUN target vector results in a Y/Z swap that produces wildly incorrect angular distances (often ~90° regardless of actual alignment). The heading/elevation reconstruction approach in §4.3 avoids this entirely.
+
+### 4.5 Target in Device Frame
 
 To determine the direction the user should move their phone to reach the target:
 

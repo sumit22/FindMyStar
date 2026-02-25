@@ -50,10 +50,10 @@ The tracking mode operates as a finite state machine with five states. Transitio
 | Idle           | Initializing   | User taps "Track" on ObjectInfoScreen            |
 | Initializing   | Tracking       | GPS acquired, IMU calibrated, initial position computed |
 | Initializing   | Error          | Sensor timeout (>5s), GPS unavailable, camera denied |
-| Tracking       | Locked         | Angular error < 0.5° sustained for 2+ seconds   |
+| Tracking       | Locked         | Angular error < 0.5° sustained for 2+ seconds (hysteresis: unlock at > 1.0°) |
 | Tracking       | Idle           | User taps "Stop" or "Back"                       |
 | Tracking       | Error          | Sensor failure, computation exception            |
-| Locked         | Tracking       | Angular error exceeds 0.5° (immediate unlock)    |
+| Locked         | Tracking       | Angular error exceeds 1.0° (hysteresis unlock)   |
 | Locked         | Idle           | User taps "Stop" or "Back"                       |
 | Error          | Tracking       | User taps "Retry" and sensors recover            |
 | Error          | Idle           | User taps "Back"                                 |
@@ -94,13 +94,19 @@ The primary active state. The tracking loop runs at 30+ FPS, continuously comput
 **Loop (each frame)**:
 1. Read fused device orientation quaternion from SensorFusionService.
 2. Compute target altitude/azimuth for current time (updates RA/Dec for planets; uses cached RA/Dec for stars).
-3. Convert target alt/az to a 3D unit vector.
-4. Compute angular error between device direction and target vector.
-5. Determine arrow rotation angle and color.
-6. Dispatch updated tracking result to Redux store.
-7. Check lock condition (angle < 0.5°).
+3. Extract `deviceHeading` (compass bearing of back camera) and `deviceElevation` (tilt above horizon) from the quaternion.
+4. Build `deviceDir` unit vector in the Rust core's EUN (East-Up-North) frame from heading and elevation, using the same alt/az-to-vector3 formula as the core engine. This ensures both vectors share the same coordinate frame. See [Coordinate Transforms §4.4](../04-domain-engine/coordinate-transforms.md).
+5. Compute angular distance between `deviceDir` and target direction vector.
+6. Determine guidance phase (turn / tilt / locked) and proximity color.
+7. Dispatch updated tracking frame (altitude, azimuth, angularDistance, isLocked, deviceHeading, deviceElevation) to the Zustand store.
+8. Check lock condition (angle < 0.5°, with 1.0° hysteresis for unlock).
 
-**UI**: Directional arrow visible, rotating toward target. Angular distance badge updates every frame. Arrow color reflects proximity (see section 4).
+**Two-phase guidance**: The UI decomposes tracking into sequential steps:
+- **Phase 1 — Horizontal alignment**: When `|relativeBearing|` (difference between target azimuth and device heading) exceeds the screen FOV (~30°), a large turn hint appears: "◀ Turn left X°" or "Turn right X° ▶". The bearing counter updates live as the user rotates. Once the target enters the screen FOV, the sky guide renders with the azimuth diamond on the horizon line.
+- **Phase 2 — Vertical alignment**: With horizontal alignment achieved (diamond near center), the plumb line guides the user upward. A tilt hint ("▲ Tilt up X°") appears if the target is above the screen bounds.
+- **Convergence**: As both axes align, the target crosshair approaches the viewport center circle, guide elements turn green, and the angular distance badge shows the shrinking gap.
+
+**UI**: Sky guide overlay with horizon line, azimuth diamond, plumb line, and target crosshair. Viewport center circle as alignment target. Angular distance badge below center. All elements color-coded by proximity (blue → yellow → green). See [UI/UX Architecture §3.2](./overview.md).
 
 ### 2.4 Locked
 
@@ -108,9 +114,9 @@ The target has been acquired. The device is pointing within 0.5° of the object 
 
 **Entry conditions**: Angular error < 0.5° sustained for 2000ms. The timer resets if the angle exceeds 0.5° at any point during the 2-second window.
 
-**Exit conditions**: Angular error exceeds 0.5° at any point. The unlock is immediate (no hysteresis delay) to provide responsive feedback when the user drifts off target.
+**Exit conditions**: Angular error exceeds 1.0° (hysteresis). The 0.5° entry / 1.0° exit gap prevents rapid flickering between locked and tracking states when the user holds the phone near the threshold.
 
-**UI**: "TARGET LOCKED" banner displayed at the top of the screen with a green (#4CAF50) background. The arrow turns bright green and stops rotating (it points straight up, indicating alignment). A single haptic pulse fires on lock acquisition. An optional short audio chime plays if enabled in settings.
+**UI**: "TARGET LOCKED" banner displayed near the top of the screen with a green (#4CAF50) background. The sky guide elements (horizon, diamond, plumb line, crosshair) are hidden when locked to keep the screen clean — only the lock banner and angular distance badge remain. A single haptic pulse fires on lock acquisition. An optional short audio chime plays if enabled in settings.
 
 ### 2.5 Error
 
@@ -192,23 +198,26 @@ dispatch(setTrackingState('idle'));
 
 ## 4. UI Feedback Per State
 
-| State        | Arrow Visible | Arrow Color | Distance Badge | Banner Text       | Haptic       | Sound        |
-|--------------|---------------|-------------|----------------|-------------------|--------------|--------------|
-| Idle         | No            | N/A         | No             | None              | None         | None         |
-| Initializing | No            | N/A         | No             | "Preparing..."    | None         | None         |
-| Tracking     | Yes           | Red/Yellow/Green | Yes        | None              | None         | None         |
-| Locked       | Yes (static)  | Green       | Yes ("0.0°")   | "TARGET LOCKED"   | Single pulse | Optional chime |
-| Error        | No            | N/A         | No             | Error message     | None         | None         |
+| State        | Sky Guide | Distance Badge | Turn/Tilt Hints | Banner Text     | Haptic       | Sound        |
+|--------------|-----------|----------------|-----------------|-----------------|--------------|--------------|
+| Idle         | Hidden    | No             | No              | None            | None         | None         |
+| Initializing | Hidden    | No             | No              | "Preparing..."  | None         | None         |
+| Tracking     | Visible   | Yes            | Yes (off-screen)| None            | None         | None         |
+| Locked       | Hidden    | Yes ("0.0°")   | No              | "TARGET LOCKED" | Single pulse | Optional chime |
+| Error        | Hidden    | No             | No              | Error message   | None         | None         |
 
-### 4.1 Arrow Color Thresholds
+### 4.1 Proximity Color Thresholds
 
-These thresholds are defined in [SRS FR-6](../02-requirements/srs.md) and are non-configurable:
+The sky guide elements (horizon diamond, plumb dots, target crosshair), the viewport center circle, and the distance badge all change color based on angular distance:
 
-| Angular Distance | Color   | Hex Code | Meaning             |
-|-----------------|---------|----------|---------------------|
-| > 5°            | Red     | #F44336  | Far from target     |
-| 1° to 5°       | Yellow  | #FFC107  | Approaching target  |
-| < 1°           | Green   | #4CAF50  | Near target         |
+| Angular Distance | Color        | Theme Token    | Meaning              |
+|-----------------|--------------|----------------|----------------------|
+| > 30°           | Blue         | `colors.primary` | Far from target      |
+| 10° to 30°     | Yellow/Amber | `colors.warning` | Getting closer       |
+| 1° to 10°      | Green        | `colors.success` | Approaching target   |
+| < 1°           | Bright green | `colors.arLocked`| Near target / locked |
+
+The viewport center circle uses a simplified two-tier scheme: dim white (>10°), green (<10°), bright green (<1°). The distance badge background turns green when under 10°.
 
 Color transitions are immediate (no animation blending) to provide clear, unambiguous feedback.
 
@@ -294,25 +303,34 @@ When device battery drops below 15%, the AR screen displays a non-intrusive warn
 
 ---
 
-## 8. Redux State Shape
+## 8. State Shape (Zustand Store)
 
-The `trackingSlice` in the Redux store reflects the current state machine position:
+The tracking state is managed by a Zustand store (`useTrackingStore`) rather than Redux. The `ar` field holds the real-time tracking frame, updated at ~30 FPS by the ObjectTrackingService callback:
 
 ```typescript
+interface ARState {
+  altitude: number;         // Target altitude (degrees above horizon)
+  azimuth: number;          // Target azimuth (degrees, 0=N, 90=E)
+  angularDistance: number;  // Angular separation from device to target (degrees)
+  isLocked: boolean;        // True when locked on target
+  deviceHeading: number;    // Device compass heading (degrees, 0=N, 90=E)
+  deviceElevation: number;  // Device tilt above horizon (degrees, 0=level)
+}
+
 interface TrackingState {
-  state: 'idle' | 'initializing' | 'tracking' | 'locked' | 'error';
-  activeObject: CelestialObject | null;
-  angularError: number;           // degrees, 0.0 = perfect alignment
-  arrowRotation: number;          // degrees, direction to rotate arrow
-  arrowColor: 'red' | 'yellow' | 'green';
-  lockStartTime: number | null;   // monotonic timestamp, null if not approaching lock
-  fps: number;                    // current frame rate (debug)
-  error: TrackingError | null;    // populated only in Error state
-  needsCalibration: boolean;      // true when magnetometer accuracy degraded
+  trackedObjects: TrackedObjectInfo[];
+  activeTrackingId: number | null;
+  ar: ARState | null;        // null when not tracking
+  loading: boolean;
+  error: string | null;
 }
 ```
 
-Selectors derived from this state determine all visual elements on the ARScreen. Components never compute arrow color or lock status directly; they read pre-computed values from Redux selectors.
+The ARScreen component derives all visual elements from `ar`:
+- `relativeBearing = ((ar.azimuth - ar.deviceHeading + 540) % 360) - 180` — horizontal offset to target
+- `relativeElevation = ar.altitude - ar.deviceElevation` — vertical offset to target
+- Proximity color is derived from `ar.angularDistance` using the thresholds in section 4.1
+- Lock state comes directly from `ar.isLocked`
 
 ---
 
