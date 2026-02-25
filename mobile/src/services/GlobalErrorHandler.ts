@@ -13,32 +13,40 @@ declare const ErrorUtils: {
   setGlobalHandler: (handler: (error: Error, isFatal?: boolean) => void) => void;
 };
 
+interface ErrorContext {
+  phase: string;
+  fatal: boolean;
+  build: 'dev' | 'prod';
+}
+
 /**
  * Hook for crash reporting integration.
  * Replace this body with Sentry.captureException() / Crashlytics.recordError()
- * when a reporting SDK is added. Until then, logs to console.
+ * when a reporting SDK is added. Until then, logs to console with structured context.
  */
-function reportError(error: unknown, context: string): void {
+function reportError(error: unknown, ctx: ErrorContext): void {
   if (__DEV__) {
-    console.error(`[GlobalErrorHandler] ${context}:`, error);
+    console.error(`[GlobalErrorHandler] ${ctx.phase}:`, error, ctx);
   } else {
-    console.warn(`[GlobalErrorHandler] ${context}:`, error);
+    console.warn(`[GlobalErrorHandler] ${ctx.phase}:`, error, ctx);
   }
 }
 
 export function install(): void {
   // Unhandled promise rejections — log but don't crash
   // RN's globalThis doesn't declare onunhandledrejection, so use bracket access.
+  const build = __DEV__ ? 'dev' : ('prod' as const);
+
   const g = globalThis as Record<string, unknown>;
   g.onunhandledrejection = (event: { reason?: unknown }) => {
-    reportError(event?.reason, 'Unhandled rejection');
+    reportError(event?.reason, { phase: 'unhandledRejection', fatal: false, build });
   };
 
   // React Native's global JS error handler
   if (typeof ErrorUtils !== 'undefined') {
     const defaultHandler = ErrorUtils.getGlobalHandler();
     ErrorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
-      reportError(error, isFatal ? 'FATAL' : 'non-fatal');
+      reportError(error, { phase: 'globalHandler', fatal: !!isFatal, build });
       if (isFatal) {
         // Forward fatal errors to the default handler (crash report / red screen)
         defaultHandler(error, isFatal);
