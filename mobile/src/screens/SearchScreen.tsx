@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,14 @@ import {
   StyleProp,
   TextStyle,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../theme/ThemeContext';
 import { useCatalogStore } from '../store/catalogStore';
 import { useEntitlementStore } from '../store/entitlementStore';
-import * as CatalogRepo from '../data/CatalogRepository';
+import { useVisibilityStore } from '../store/visibilityStore';
 import type { CelestialObject } from '../data/CatalogRepository';
-import * as VisibilityService from '../services/VisibilityService';
+import * as VisibilityCacheService from '../services/VisibilityCacheService';
 import * as LocationService from '../services/LocationService';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -104,73 +104,61 @@ function ResultItem({
   );
 }
 
-/* ── Visible Now hook ── */
-interface VisibleObject {
-  obj: CelestialObject;
-  altitude: number;
-  azimuth: number;
-}
-
-function useVisibleNow(): { items: VisibleObject[]; loading: boolean } {
-  const [items, setItems] = useState<VisibleObject[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        const loc = await LocationService.getCurrentLocation();
-        const all = await CatalogRepo.getAllObjects();
-        const bright = all.filter(o => o.magnitude <= 4.0).slice(0, 30);
-
-        const visible: VisibleObject[] = [];
-        for (const obj of bright) {
-          if (cancelled) {
-            return;
-          }
-          try {
-            const aa = await VisibilityService.getCurrentAltAz(obj, loc.lat, loc.lon);
-            if (aa.altitude > 0) {
-              visible.push({ obj, altitude: aa.altitude, azimuth: aa.azimuth });
-            }
-          } catch {
-            // skip object on error
-          }
-        }
-
-        if (!cancelled) {
-          visible.sort((a, b) => b.altitude - a.altitude);
-          setItems(visible.slice(0, 5));
-          setLoading(false);
-        }
-      } catch {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return { items, loading };
-}
-
 function azToCardinal(az: number): string {
   const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
   return dirs[Math.round((((az % 360) + 360) % 360) / 45) % 8];
 }
 
-/* ── Visible Now section ── */
-function VisibleNowSection({ onSelect }: { onSelect: (id: number) => void }) {
-  const { colors } = useTheme();
-  const { items, loading } = useVisibleNow();
+function formatRiseTime(ms: number): string {
+  const d = new Date(ms);
+  const h = d.getHours();
+  const m = d.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
 
-  if (loading) {
+/* ── Sky sections (Visible Now + Coming Up) ── */
+function SkySections({ onSelect }: { onSelect: (id: number) => void }) {
+  const { colors } = useTheme();
+  const visibleNow = useVisibilityStore(s => s.visibleNow);
+  const comingUp = useVisibilityStore(s => s.comingUp);
+  const loading = useVisibilityStore(s => s.loading);
+  const loadFromCache = useVisibilityStore(s => s.loadFromCache);
+  const refreshCache = useVisibilityStore(s => s.refreshCache);
+  const tick = useVisibilityStore(s => s.tick);
+
+  // On screen focus: ensure cache is fresh, load from cache, start 60s tick
+  useFocusEffect(
+    useCallback(() => {
+      let tickTimer: ReturnType<typeof setInterval> | null = null;
+
+      (async () => {
+        const loc = LocationService.getLastKnown();
+        if (!loc) {
+          return;
+        }
+
+        // Ensure cache is populated, then load into store
+        if (await VisibilityCacheService.isCacheStale()) {
+          await refreshCache(loc.lat, loc.lon);
+        } else {
+          await loadFromCache(loc.lat, loc.lon);
+        }
+
+        // Re-evaluate buckets every 60s (pure cache reads, no FFI)
+        tickTimer = setInterval(() => tick(), 60_000);
+      })();
+
+      return () => {
+        if (tickTimer) {
+          clearInterval(tickTimer);
+        }
+      };
+    }, [loadFromCache, refreshCache, tick]),
+  );
+
+  if (loading && visibleNow.length === 0 && comingUp.length === 0) {
     return (
       <View style={styles.visibleSection}>
         <InstrumentLabel text="VISIBLE NOW" color={colors.textSecondary} />
@@ -179,42 +167,82 @@ function VisibleNowSection({ onSelect }: { onSelect: (id: number) => void }) {
     );
   }
 
-  if (items.length === 0) {
-    return null;
-  }
-
   return (
-    <View style={styles.visibleSection}>
-      <InstrumentLabel text="VISIBLE NOW" color={colors.textSecondary} />
-      <View style={[styles.visibleList, { borderColor: colors.border }]}>
-        {items.map(({ obj, altitude, azimuth }, idx) => {
-          const icon = TYPE_ICONS[obj.type] ?? '\u2022';
-          return (
-            <React.Fragment key={obj.id}>
-              {idx > 0 && <View style={[styles.hairline, { backgroundColor: colors.border }]} />}
-              <TouchableOpacity
-                style={styles.visibleRow}
-                onPress={() => onSelect(obj.id)}
-                activeOpacity={0.6}>
-                <Text style={[styles.visibleMarker, { color: colors.accent + '80' }]}>{icon}</Text>
-                <View style={styles.visibleInfo}>
-                  <Text style={[styles.visibleName, { color: colors.text }]} numberOfLines={1}>
-                    {obj.commonName ?? obj.name}
-                  </Text>
-                  <Text style={[styles.visibleDir, { color: colors.textSecondary }]}>
-                    {azToCardinal(azimuth)}
-                  </Text>
-                </View>
-                <Text style={[styles.visibleAlt, { color: colors.success }]}>
-                  {altitude.toFixed(0)}
-                  {'\u00B0'}
-                </Text>
-              </TouchableOpacity>
-            </React.Fragment>
-          );
-        })}
-      </View>
-    </View>
+    <>
+      {/* Visible Now */}
+      {visibleNow.length > 0 && (
+        <View style={styles.visibleSection}>
+          <InstrumentLabel text="VISIBLE NOW" color={colors.textSecondary} />
+          <View style={[styles.visibleList, { borderColor: colors.border }]}>
+            {visibleNow.map(({ obj, altitude, azimuth }, idx) => {
+              const icon = TYPE_ICONS[obj.type] ?? '\u2022';
+              return (
+                <React.Fragment key={obj.id}>
+                  {idx > 0 && (
+                    <View style={[styles.hairline, { backgroundColor: colors.border }]} />
+                  )}
+                  <TouchableOpacity
+                    style={styles.visibleRow}
+                    onPress={() => onSelect(obj.id)}
+                    activeOpacity={0.6}>
+                    <Text style={[styles.visibleMarker, { color: colors.accent + '80' }]}>
+                      {icon}
+                    </Text>
+                    <View style={styles.visibleInfo}>
+                      <Text style={[styles.visibleName, { color: colors.text }]} numberOfLines={1}>
+                        {obj.commonName ?? obj.name}
+                      </Text>
+                      <Text style={[styles.visibleDir, { color: colors.textSecondary }]}>
+                        {azToCardinal(azimuth)}
+                      </Text>
+                    </View>
+                    <Text style={[styles.visibleAlt, { color: colors.success }]}>
+                      {altitude.toFixed(0)}
+                      {'\u00B0'}
+                    </Text>
+                  </TouchableOpacity>
+                </React.Fragment>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
+      {/* Coming Up */}
+      {comingUp.length > 0 && (
+        <View style={styles.visibleSection}>
+          <InstrumentLabel text="COMING UP" color={colors.textSecondary} />
+          <View style={[styles.visibleList, { borderColor: colors.border }]}>
+            {comingUp.map(({ obj, riseMs }, idx) => {
+              const icon = TYPE_ICONS[obj.type] ?? '\u2022';
+              return (
+                <React.Fragment key={obj.id}>
+                  {idx > 0 && (
+                    <View style={[styles.hairline, { backgroundColor: colors.border }]} />
+                  )}
+                  <TouchableOpacity
+                    style={styles.visibleRow}
+                    onPress={() => onSelect(obj.id)}
+                    activeOpacity={0.6}>
+                    <Text style={[styles.visibleMarker, { color: colors.accent + '80' }]}>
+                      {icon}
+                    </Text>
+                    <View style={styles.visibleInfo}>
+                      <Text style={[styles.visibleName, { color: colors.text }]} numberOfLines={1}>
+                        {obj.commonName ?? obj.name}
+                      </Text>
+                    </View>
+                    <Text style={[styles.comingUpTime, { color: colors.textSecondary }]}>
+                      {formatRiseTime(riseMs)}
+                    </Text>
+                  </TouchableOpacity>
+                </React.Fragment>
+              );
+            })}
+          </View>
+        </View>
+      )}
+    </>
   );
 }
 
@@ -292,7 +320,7 @@ export default function SearchScreen(): React.JSX.Element {
           <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
             Try "Sirius", "Jupiter", or "M31"
           </Text>
-          <VisibleNowSection onSelect={handleSelect} />
+          <SkySections onSelect={handleSelect} />
         </>
       )}
 
@@ -388,6 +416,12 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     minWidth: 32,
     textAlign: 'right',
+  },
+  comingUpTime: {
+    fontSize: 12,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.3,
   },
 
   /* ── Result items ── */

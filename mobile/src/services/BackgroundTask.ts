@@ -11,6 +11,7 @@
 import { AppState, AppStateStatus } from 'react-native';
 import BackgroundFetch from 'react-native-background-fetch';
 import * as AlarmScheduler from './AlarmScheduler';
+import * as VisibilityCacheService from './VisibilityCacheService';
 
 let lastRecalcDate = '';
 let appStateListener: ReturnType<typeof AppState.addEventListener> | null = null;
@@ -34,7 +35,7 @@ async function recalculateIfNeeded(): Promise<void> {
   }
 
   try {
-    await AlarmScheduler.recalculateAll();
+    await Promise.all([AlarmScheduler.recalculateAll(), VisibilityCacheService.refreshCache()]);
     lastRecalcDate = today;
   } catch (e) {
     console.warn('[BackgroundTask] recalculation failed:', e);
