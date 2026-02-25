@@ -93,18 +93,23 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
       await get().loadAlarms();
     } catch (e) {
       set({ error: e instanceof Error ? e.message : 'Failed to create alarm' });
-      throw e;
     }
   },
 
   deleteAlarm: async alarmId => {
+    const previous = get().trackedObjects;
+    // Optimistic removal
+    set(state => ({
+      trackedObjects: state.trackedObjects.filter(o => o.id !== alarmId),
+    }));
     try {
       await AlarmScheduler.deleteAlarm(alarmId);
-      set(state => ({
-        trackedObjects: state.trackedObjects.filter(o => o.id !== alarmId),
-      }));
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : 'Failed to delete alarm' });
+      // Rollback on failure
+      set({
+        trackedObjects: previous,
+        error: e instanceof Error ? e.message : 'Failed to delete alarm',
+      });
     }
   },
 
@@ -113,15 +118,21 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
     if (!obj) {
       return;
     }
+    const previous = get().trackedObjects;
+    // Optimistic toggle
+    set(state => ({
+      trackedObjects: state.trackedObjects.map(o =>
+        o.id === alarmId ? { ...o, enabled: !o.enabled } : o,
+      ),
+    }));
     try {
       await AlarmScheduler.toggleAlarm(alarmId, !obj.enabled);
-      set(state => ({
-        trackedObjects: state.trackedObjects.map(o =>
-          o.id === alarmId ? { ...o, enabled: !o.enabled } : o,
-        ),
-      }));
     } catch (e) {
-      set({ error: e instanceof Error ? e.message : 'Failed to toggle alarm' });
+      // Rollback on failure
+      set({
+        trackedObjects: previous,
+        error: e instanceof Error ? e.message : 'Failed to toggle alarm',
+      });
     }
   },
 

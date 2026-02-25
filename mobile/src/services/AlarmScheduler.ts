@@ -57,27 +57,33 @@ export async function createAlarm(
 
   const alarmId = await CatalogRepo.createTrackedObject(objectId, fullConfig);
 
-  // Compute next visible time and update the alarm
-  const obj = await CatalogRepo.getById(objectId);
-  if (obj) {
-    const riseSet = await VisibilityService.computeRiseSet(obj, loc.lat, loc.lon);
-    await CatalogRepo.updateTrackedObject(alarmId, {
-      nextRiseMs: riseSet.riseTime,
-      nextSetMs: riseSet.setTime,
-    });
+  // Compute next visible time and update the alarm.
+  // Wrapped in try/catch — the alarm record is already saved; rise/set
+  // computation will be retried on the next recalculation cycle.
+  try {
+    const obj = await CatalogRepo.getById(objectId);
+    if (obj) {
+      const riseSet = await VisibilityService.computeRiseSet(obj, loc.lat, loc.lon);
+      await CatalogRepo.updateTrackedObject(alarmId, {
+        nextRiseMs: riseSet.riseTime,
+        nextSetMs: riseSet.setTime,
+      });
 
-    // Schedule OS notification
-    if (riseSet.riseTime && scheduleNotification) {
-      const notifyMs = riseSet.riseTime - (fullConfig.notifyBeforeMinutes ?? 15) * 60 * 1000;
-      if (notifyMs > Date.now()) {
-        scheduleNotification(
-          alarmId,
-          `${obj.commonName ?? obj.name} is rising soon`,
-          `${obj.commonName ?? obj.name} will be visible in ${fullConfig.notifyBeforeMinutes ?? 15} minutes`,
-          new Date(notifyMs),
-        );
+      // Schedule OS notification
+      if (riseSet.riseTime && scheduleNotification) {
+        const notifyMs = riseSet.riseTime - (fullConfig.notifyBeforeMinutes ?? 15) * 60 * 1000;
+        if (notifyMs > Date.now()) {
+          scheduleNotification(
+            alarmId,
+            `${obj.commonName ?? obj.name} is rising soon`,
+            `${obj.commonName ?? obj.name} will be visible in ${fullConfig.notifyBeforeMinutes ?? 15} minutes`,
+            new Date(notifyMs),
+          );
+        }
       }
     }
+  } catch (e) {
+    console.warn(`[AlarmScheduler] post-create computation failed for alarm ${alarmId}:`, e);
   }
 
   return alarmId;
@@ -126,7 +132,13 @@ export async function listAlarms(): Promise<CatalogRepo.TrackedObject[]> {
  * Must complete within 2 seconds for background task budget.
  */
 export async function recalculateAll(): Promise<void> {
-  const alarms = await CatalogRepo.getTrackedObjects();
+  let alarms: CatalogRepo.TrackedObject[];
+  try {
+    alarms = await CatalogRepo.getTrackedObjects();
+  } catch (e) {
+    console.warn('[AlarmScheduler] failed to load tracked objects:', e);
+    return;
+  }
 
   for (const alarm of alarms) {
     if (!alarm.enabled) {

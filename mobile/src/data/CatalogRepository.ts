@@ -123,6 +123,10 @@ function getDb(): Promise<SQLiteDatabase> {
       name: 'findmystar.db',
       location: 'default',
       createFromLocation: '~findmystar.db',
+    }).catch(e => {
+      // Reset so next call retries instead of permanently caching the rejection
+      dbPromise = null;
+      throw e;
     });
   }
   return dbPromise;
@@ -133,19 +137,31 @@ async function query<T>(
   params: (string | number | null)[],
   mapper: (row: Record<string, unknown>) => T,
 ): Promise<T[]> {
-  const conn = await getDb();
-  const [results] = await conn.executeSql(sql, params);
-  const rows: T[] = [];
-  for (let i = 0; i < results.rows.length; i++) {
-    rows.push(mapper(results.rows.item(i)));
+  try {
+    const conn = await getDb();
+    const [results] = await conn.executeSql(sql, params);
+    const rows: T[] = [];
+    for (let i = 0; i < results.rows.length; i++) {
+      rows.push(mapper(results.rows.item(i)));
+    }
+    return rows;
+  } catch (e) {
+    throw new Error(
+      `Database query failed [${sql.slice(0, 60)}]: ${e instanceof Error ? e.message : e}`,
+    );
   }
-  return rows;
 }
 
 async function execute(sql: string, params: (string | number | null)[]): Promise<number> {
-  const conn = await getDb();
-  const [result] = await conn.executeSql(sql, params);
-  return result.insertId ?? 0;
+  try {
+    const conn = await getDb();
+    const [result] = await conn.executeSql(sql, params);
+    return result.insertId ?? 0;
+  } catch (e) {
+    throw new Error(
+      `Database execute failed [${sql.slice(0, 60)}]: ${e instanceof Error ? e.message : e}`,
+    );
+  }
 }
 
 // ============================================================================
