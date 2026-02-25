@@ -140,42 +140,42 @@ export async function recalculateAll(): Promise<void> {
     return;
   }
 
-  for (const alarm of alarms) {
-    if (!alarm.enabled) {
-      continue;
-    }
+  const enabled = alarms.filter(a => a.enabled);
 
-    try {
-      const obj = await CatalogRepo.getById(alarm.objectId);
-      if (!obj) {
-        continue;
-      }
-
-      const riseSet = await VisibilityService.computeRiseSet(obj, alarm.lat, alarm.lon);
-
-      await CatalogRepo.updateTrackedObject(alarm.id, {
-        nextRiseMs: riseSet.riseTime,
-        nextSetMs: riseSet.setTime,
-      });
-
-      // Cancel old notification and schedule new one
-      cancelNotification?.(alarm.id);
-
-      if (riseSet.riseTime && scheduleNotification) {
-        const notifyMs = riseSet.riseTime - alarm.notifyBeforeMinutes * 60 * 1000;
-        if (notifyMs > Date.now()) {
-          scheduleNotification(
-            alarm.id,
-            `${obj.commonName ?? obj.name} is rising soon`,
-            `${obj.commonName ?? obj.name} will be visible in ${alarm.notifyBeforeMinutes} minutes`,
-            new Date(notifyMs),
-          );
+  await Promise.all(
+    enabled.map(async alarm => {
+      try {
+        const obj = await CatalogRepo.getById(alarm.objectId);
+        if (!obj) {
+          return;
         }
+
+        const riseSet = await VisibilityService.computeRiseSet(obj, alarm.lat, alarm.lon);
+
+        await CatalogRepo.updateTrackedObject(alarm.id, {
+          nextRiseMs: riseSet.riseTime,
+          nextSetMs: riseSet.setTime,
+        });
+
+        // Cancel old notification and schedule new one
+        cancelNotification?.(alarm.id);
+
+        if (riseSet.riseTime && scheduleNotification) {
+          const notifyMs = riseSet.riseTime - alarm.notifyBeforeMinutes * 60 * 1000;
+          if (notifyMs > Date.now()) {
+            scheduleNotification(
+              alarm.id,
+              `${obj.commonName ?? obj.name} is rising soon`,
+              `${obj.commonName ?? obj.name} will be visible in ${alarm.notifyBeforeMinutes} minutes`,
+              new Date(notifyMs),
+            );
+          }
+        }
+      } catch (e) {
+        console.warn(`[AlarmScheduler] recalculation failed for alarm ${alarm.id}:`, e);
       }
-    } catch (e) {
-      console.warn(`[AlarmScheduler] recalculation failed for alarm ${alarm.id}:`, e);
-    }
-  }
+    }),
+  );
 }
 
 /**
