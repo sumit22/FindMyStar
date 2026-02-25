@@ -14,6 +14,8 @@
 /mobile/android/build/
 /mobile/android/app/src/main/jniLibs/
 /mobile/android/app/src/main/assets/findmystar.db
+/mobile/android/app/src/main/assets/index.android.bundle
+/mobile/android/app/src/main/res/drawable-*/node_modules_*
 /mobile/android/local.properties
 /mobile/android/keystore.properties
 /mobile/android/app/release.keystore
