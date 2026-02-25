@@ -10,6 +10,7 @@ export type { CelestialObject } from '../data/CatalogRepository';
 import type { CelestialObject } from '../data/CatalogRepository';
 
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let searchRequestId = 0;
 const SEARCH_DEBOUNCE_MS = 300;
 
 interface CatalogState {
@@ -69,13 +70,21 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
     }
 
     searchDebounceTimer = setTimeout(async () => {
+      const requestId = ++searchRequestId;
       set({ loading: true });
       try {
         const results = await CatalogRepo.search(query, 50);
+        // Discard stale results if a newer search was fired while awaiting
+        if (requestId !== searchRequestId) {
+          return;
+        }
         const filterType = get().filterType;
         const filtered = filterType ? results.filter(o => o.type === filterType) : results;
         set({ searchResults: filtered, loading: false });
       } catch (e) {
+        if (requestId !== searchRequestId) {
+          return;
+        }
         set({ loading: false, error: e instanceof Error ? e.message : 'Search failed' });
       }
     }, SEARCH_DEBOUNCE_MS);

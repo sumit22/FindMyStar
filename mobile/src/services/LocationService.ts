@@ -44,38 +44,85 @@ export async function requestPermission(): Promise<boolean> {
 
 export function getCurrentLocation(): Promise<Location> {
   return new Promise((resolve, reject) => {
-    // Try high accuracy (GPS) first, fall back to network (cell/WiFi)
-    Geolocation.getCurrentPosition(
-      pos => {
-        const loc = toLocation(pos);
-        lastKnown = loc;
-        resolve(loc);
-      },
-      () => {
-        // GPS timed out — retry with network location (works indoors)
-        Geolocation.getCurrentPosition(
-          pos => {
-            const loc = toLocation(pos);
-            lastKnown = loc;
-            resolve(loc);
-          },
-          err => {
-            if (lastKnown) {
-              console.warn(
-                '[LocationService] Using cached location (age: ' +
-                  Math.round((Date.now() - lastKnown.timestamp) / 1000) +
-                  's)',
-              );
-              resolve(lastKnown);
-            } else {
-              reject(new Error(`Location unavailable: ${err.message}`));
-            }
-          },
-          { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
-        );
-      },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 },
-    );
+    let settled = false;
+
+    // Global 25s safety timeout — prevents indefinite promise hang
+    const timer = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (lastKnown) {
+        console.warn('[LocationService] Global timeout — using cached location');
+        resolve(lastKnown);
+      } else {
+        reject(new Error('Location unavailable: global timeout (25s)'));
+      }
+    }, 25000);
+
+    try {
+      // Try high accuracy (GPS) first, fall back to network (cell/WiFi)
+      Geolocation.getCurrentPosition(
+        pos => {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          clearTimeout(timer);
+          const loc = toLocation(pos);
+          lastKnown = loc;
+          resolve(loc);
+        },
+        () => {
+          if (settled) {
+            return;
+          }
+          // GPS timed out — retry with network location (works indoors)
+          Geolocation.getCurrentPosition(
+            pos => {
+              if (settled) {
+                return;
+              }
+              settled = true;
+              clearTimeout(timer);
+              const loc = toLocation(pos);
+              lastKnown = loc;
+              resolve(loc);
+            },
+            err => {
+              if (settled) {
+                return;
+              }
+              settled = true;
+              clearTimeout(timer);
+              if (lastKnown) {
+                console.warn(
+                  '[LocationService] Using cached location (age: ' +
+                    Math.round((Date.now() - lastKnown.timestamp) / 1000) +
+                    's)',
+                );
+                resolve(lastKnown);
+              } else {
+                reject(new Error(`Location unavailable: ${err.message}`));
+              }
+            },
+            { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
+          );
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 },
+      );
+    } catch (e) {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        if (lastKnown) {
+          console.warn('[LocationService] Geolocation call threw — using cached location:', e);
+          resolve(lastKnown);
+        } else {
+          reject(new Error(`Location unavailable: ${e instanceof Error ? e.message : e}`));
+        }
+      }
+    }
   });
 }
 

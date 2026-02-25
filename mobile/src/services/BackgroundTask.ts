@@ -72,8 +72,11 @@ export function initialize(): void {
       enableHeadless: true,
     },
     async (taskId: string) => {
-      await recalculateIfNeeded();
-      BackgroundFetch.finish(taskId);
+      try {
+        await recalculateIfNeeded();
+      } finally {
+        BackgroundFetch.finish(taskId);
+      }
     },
     (taskId: string) => {
       // OS demanded we stop — signal completion immediately

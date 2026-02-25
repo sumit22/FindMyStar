@@ -42,7 +42,13 @@ function planTypeToName(n: number): PlanTypeName {
  * ID is unavailable (e.g. emulator or missing native module).
  */
 async function getDeviceId(): Promise<string> {
-  let id = await AsyncStorage.getItem(DEVICE_ID_KEY);
+  let id: string | null = null;
+  try {
+    id = await AsyncStorage.getItem(DEVICE_ID_KEY);
+  } catch (e) {
+    console.warn('[entitlementStore] AsyncStorage read failed:', e);
+  }
+
   if (!id) {
     // Try platform-provided stable identifier first
     try {
@@ -78,7 +84,11 @@ async function getDeviceId(): Promise<string> {
       id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
     }
 
-    await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+    try {
+      await AsyncStorage.setItem(DEVICE_ID_KEY, id);
+    } catch (e) {
+      console.warn('[entitlementStore] AsyncStorage write failed:', e);
+    }
   }
   return id;
 }
