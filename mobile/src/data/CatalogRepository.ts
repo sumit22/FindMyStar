@@ -43,6 +43,29 @@ export interface AlarmConfig {
   isRecurring?: boolean;
 }
 
+export interface VisibilityWindow {
+  objectId: number;
+  riseMs: number | null;
+  setMs: number | null;
+  isCircumpolar: boolean;
+  isNeverVisible: boolean;
+  computedAtMs: number;
+  lat: number;
+  lon: number;
+}
+
+export interface VisibleNowRow {
+  obj: CelestialObject;
+  riseMs: number | null;
+  setMs: number | null;
+  isCircumpolar: boolean;
+}
+
+export interface ComingUpRow {
+  obj: CelestialObject;
+  riseMs: number;
+}
+
 // ============================================================================
 // LRU Cache
 // ============================================================================
@@ -316,4 +339,132 @@ export async function deleteEntitlement(): Promise<void> {
 
 export function clearCache(): void {
   objectCache.clear();
+}
+
+// ============================================================================
+// Visibility Cache
+// ============================================================================
+
+let visibilityTableReady = false;
+
+export async function ensureVisibilityTable(): Promise<void> {
+  if (visibilityTableReady) {
+    return;
+  }
+  const conn = await getDb();
+  await conn.executeSql(`
+    CREATE TABLE IF NOT EXISTS visibility_windows (
+      object_id        INTEGER PRIMARY KEY,
+      rise_ms          INTEGER,
+      set_ms           INTEGER,
+      is_circumpolar   INTEGER NOT NULL DEFAULT 0,
+      is_never_visible INTEGER NOT NULL DEFAULT 0,
+      computed_at_ms   INTEGER NOT NULL,
+      lat              REAL NOT NULL,
+      lon              REAL NOT NULL,
+      FOREIGN KEY (object_id) REFERENCES objects(id) ON DELETE CASCADE
+    )
+  `);
+  visibilityTableReady = true;
+}
+
+export async function upsertVisibilityWindows(rows: VisibilityWindow[]): Promise<void> {
+  if (rows.length === 0) {
+    return;
+  }
+  await ensureVisibilityTable();
+  const conn = await getDb();
+  await conn.executeSql('BEGIN TRANSACTION');
+  try {
+    for (const r of rows) {
+      await conn.executeSql(
+        `INSERT OR REPLACE INTO visibility_windows
+           (object_id, rise_ms, set_ms, is_circumpolar, is_never_visible, computed_at_ms, lat, lon)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          r.objectId,
+          r.riseMs,
+          r.setMs,
+          r.isCircumpolar ? 1 : 0,
+          r.isNeverVisible ? 1 : 0,
+          r.computedAtMs,
+          r.lat,
+          r.lon,
+        ],
+      );
+    }
+    await conn.executeSql('COMMIT');
+  } catch (e) {
+    await conn.executeSql('ROLLBACK');
+    throw e;
+  }
+}
+
+function mapVisibleNowRow(row: Record<string, unknown>): VisibleNowRow {
+  return {
+    obj: mapRow(row),
+    riseMs: (row.rise_ms as number) ?? null,
+    setMs: (row.set_ms as number) ?? null,
+    isCircumpolar: (row.is_circumpolar as number) === 1,
+  };
+}
+
+function mapComingUpRow(row: Record<string, unknown>): ComingUpRow {
+  return {
+    obj: mapRow(row),
+    riseMs: row.rise_ms as number,
+  };
+}
+
+export async function getVisibleNowFromCache(nowMs: number): Promise<VisibleNowRow[]> {
+  await ensureVisibilityTable();
+  return query(
+    `SELECT o.*, vw.rise_ms, vw.set_ms, vw.is_circumpolar
+     FROM visibility_windows vw
+     JOIN objects o ON vw.object_id = o.id
+     WHERE vw.is_never_visible = 0
+       AND (vw.is_circumpolar = 1 OR (vw.set_ms < vw.rise_ms AND vw.set_ms > ?))
+     ORDER BY o.magnitude ASC
+     LIMIT 10`,
+    [nowMs],
+    mapVisibleNowRow,
+  );
+}
+
+export async function getComingUpFromCache(
+  nowMs: number,
+  windowMs: number,
+): Promise<ComingUpRow[]> {
+  await ensureVisibilityTable();
+  return query(
+    `SELECT o.*, vw.rise_ms
+     FROM visibility_windows vw
+     JOIN objects o ON vw.object_id = o.id
+     WHERE vw.is_never_visible = 0
+       AND vw.is_circumpolar = 0
+       AND vw.rise_ms > ?
+       AND vw.rise_ms <= ?
+     ORDER BY vw.rise_ms ASC
+     LIMIT 10`,
+    [nowMs, nowMs + windowMs],
+    mapComingUpRow,
+  );
+}
+
+export async function getVisibilityCacheMeta(): Promise<{
+  computedAtMs: number;
+  lat: number;
+  lon: number;
+} | null> {
+  await ensureVisibilityTable();
+  const rows = await query(
+    'SELECT computed_at_ms, lat, lon FROM visibility_windows LIMIT 1',
+    [],
+    row => ({
+      computedAtMs: row.computed_at_ms as number,
+      lat: row.lat as number,
+      lon: row.lon as number,
+    }),
+  );
+  return rows[0] ?? null;
 }

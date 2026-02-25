@@ -65,6 +65,21 @@ CREATE TABLE IF NOT EXISTS entitlements (
   updated_at INTEGER DEFAULT (strftime('%s', 'now'))
 );
 
+-- Visibility Cache (pre-computed rise/set windows for bright objects)
+-- Populated by background task once or twice daily. Allows instant
+-- "Visible Now" / "Coming Up" filtering without Rust FFI at display time.
+CREATE TABLE IF NOT EXISTS visibility_windows (
+  object_id        INTEGER PRIMARY KEY,
+  rise_ms          INTEGER,
+  set_ms           INTEGER,
+  is_circumpolar   INTEGER NOT NULL DEFAULT 0 CHECK (is_circumpolar IN (0, 1)),
+  is_never_visible INTEGER NOT NULL DEFAULT 0 CHECK (is_never_visible IN (0, 1)),
+  computed_at_ms   INTEGER NOT NULL,
+  lat              REAL NOT NULL CHECK (lat >= -90 AND lat <= 90),
+  lon              REAL NOT NULL CHECK (lon >= -180 AND lon <= 180),
+  FOREIGN KEY (object_id) REFERENCES objects(id) ON DELETE CASCADE
+);
+
 -- Default preferences
 INSERT OR IGNORE INTO user_preferences (key, value) VALUES ('theme', 'dark');
 INSERT OR IGNORE INTO user_preferences (key, value) VALUES ('notifications_enabled', '1');
