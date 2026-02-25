@@ -126,8 +126,16 @@ export async function getCurrentAltAz(
   lat: number,
   lon: number,
 ): Promise<Core.AltAz> {
-  const result = await doComputeTracking(obj, lat, lon, Date.now());
-  return { altitude: result.altitude, azimuth: result.azimuth };
+  try {
+    const result = await doComputeTracking(obj, lat, lon, Date.now());
+    return { altitude: result.altitude, azimuth: result.azimuth };
+  } catch (e) {
+    console.warn(
+      '[VisibilityService] getCurrentAltAz failed, returning below-horizon fallback:',
+      e,
+    );
+    return { altitude: -90, azimuth: 0 };
+  }
 }
 
 /**

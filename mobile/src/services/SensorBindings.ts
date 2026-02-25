@@ -29,6 +29,11 @@ export function getSensorStatus(): { accel: boolean; gyro: boolean; mag: boolean
   return { ...sensorStatus };
 }
 
+/** Checks if the minimum required native sensor modules are available. */
+export function hasMinimumSensors(): boolean {
+  return AccNative != null && GyroNative != null;
+}
+
 /** Validates a sensor reading. Rejects NaN, Infinity, and extreme values. */
 function isValidReading(data: { x: number; y: number; z: number; timestamp: number }): boolean {
   return (

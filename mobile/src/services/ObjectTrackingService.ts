@@ -166,7 +166,11 @@ async function trackingLoop(): Promise<void> {
     debugFrameCount++;
 
     for (const cb of listeners) {
-      cb(frame);
+      try {
+        cb(frame);
+      } catch (e) {
+        console.warn('[ObjectTracker] listener error:', e);
+      }
     }
   } catch (e) {
     console.warn('[ObjectTracker] tracking frame error:', e);
@@ -195,6 +199,11 @@ export async function initialize(obj: CelestialObject): Promise<void> {
   locationUpdateTimer = setInterval(updateLocation, 60000);
 
   // Start hardware sensor subscriptions then fusion filter
+  if (!SensorBindings.hasMinimumSensors()) {
+    console.warn(
+      '[ObjectTracker] Minimum sensors (accel + gyro) unavailable — tracking may be degraded',
+    );
+  }
   SensorBindings.start();
   SensorFusion.start();
 

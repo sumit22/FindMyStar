@@ -501,6 +501,7 @@ export default function ARScreen(): React.JSX.Element {
   const degreesToPx = SCREEN_W / cameraFovDeg;
 
   const [objectName, setObjectName] = useState('');
+  const [initError, setInitError] = useState<string | null>(null);
 
   useEffect(() => {
     NativeModules.KeepAwake?.activate();
@@ -510,12 +511,18 @@ export default function ARScreen(): React.JSX.Element {
   useEffect(() => {
     let cancelled = false;
     async function init() {
-      const obj = await getObjectById(objectId);
-      if (cancelled || !obj) {
-        return;
+      try {
+        const obj = await getObjectById(objectId);
+        if (cancelled || !obj) {
+          return;
+        }
+        setObjectName(obj.commonName ?? obj.name);
+        await startTracking(obj);
+      } catch (e) {
+        if (!cancelled) {
+          setInitError(e instanceof Error ? e.message : 'Failed to initialize tracking');
+        }
       }
-      setObjectName(obj.commonName ?? obj.name);
-      await startTracking(obj);
     }
     init();
     return () => {
@@ -534,6 +541,24 @@ export default function ARScreen(): React.JSX.Element {
   const isLocked = ar?.isLocked ?? false;
   const distance = ar?.angularDistance ?? 999;
   const phase = phaseLabel(ar, relativeBearing, relativeElevation);
+
+  if (initError) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.errorOverlay}>
+          <Text style={styles.errorTitle}>TRACKING UNAVAILABLE</Text>
+          <Text style={styles.errorMessage}>{initError}</Text>
+          <TouchableOpacity
+            style={styles.errorButton}
+            onPress={handleBack}
+            accessibilityRole="button"
+            accessibilityLabel="Go back">
+            <Text style={styles.errorButtonText}>GO BACK</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -864,4 +889,41 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   debugWarn: { color: 'rgba(255,100,100,0.7)' },
+
+  // ── Error overlay ──
+  errorOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(10,14,20,0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FF6B6B',
+    letterSpacing: 3,
+    marginBottom: 16,
+  },
+  errorMessage: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 32,
+  },
+  errorButton: {
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  errorButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 2,
+  },
 });
