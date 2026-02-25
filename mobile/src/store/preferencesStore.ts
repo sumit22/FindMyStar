@@ -9,11 +9,13 @@ interface PreferencesState {
   theme: ThemePref;
   notificationsEnabled: boolean;
   minAltitudeDefault: number;
+  cameraFovDeg: number; // Horizontal field of view in degrees
   loaded: boolean;
 
   setTheme: (theme: ThemePref) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
   setMinAltitudeDefault: (altitude: number) => void;
+  setCameraFovDeg: (fov: number) => void;
   loadPreferences: () => Promise<void>;
 }
 
@@ -31,6 +33,7 @@ export const usePreferencesStore = create<PreferencesState>(set => ({
   theme: 'dark',
   notificationsEnabled: true,
   minAltitudeDefault: 10,
+  cameraFovDeg: 60, // Default ~60° horizontal FOV (typical smartphone rear camera)
   loaded: false,
 
   setTheme: theme => {
@@ -48,6 +51,12 @@ export const usePreferencesStore = create<PreferencesState>(set => ({
     persist({ minAltitudeDefault: altitude });
   },
 
+  setCameraFovDeg: fov => {
+    const clamped = Math.max(30, Math.min(120, fov));
+    set({ cameraFovDeg: clamped });
+    persist({ cameraFovDeg: clamped });
+  },
+
   loadPreferences: async () => {
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
@@ -57,6 +66,7 @@ export const usePreferencesStore = create<PreferencesState>(set => ({
           theme: data.theme ?? 'dark',
           notificationsEnabled: data.notificationsEnabled ?? true,
           minAltitudeDefault: data.minAltitudeDefault ?? 10,
+          cameraFovDeg: data.cameraFovDeg ?? 60,
           loaded: true,
         });
       } else {
