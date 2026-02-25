@@ -13,7 +13,14 @@ import type { ThemePref } from '../store/preferencesStore';
 import * as Core from '../native/FindMyStarCore';
 import { usePurchase } from '../purchase/usePurchase';
 
-const DevSettingsPanel = __DEV__ ? require('../__dev__/DevSettingsPanel').default : null;
+// DevSettingsPanel is only available in development builds.
+// The double-guard (__DEV__ + process.env.NODE_ENV) ensures dead-code
+// elimination removes the entire require() in production bundles even if
+// the Metro --dev flag is accidentally left on.
+const DevSettingsPanel =
+  __DEV__ && process.env.NODE_ENV !== 'production'
+    ? require('../__dev__/DevSettingsPanel').default
+    : null;
 
 const THEME_OPTIONS: { label: string; value: ThemePref }[] = [
   { label: 'Dark', value: 'dark' },
@@ -22,6 +29,13 @@ const THEME_OPTIONS: { label: string; value: ThemePref }[] = [
 ];
 
 const ALTITUDE_OPTIONS = [5, 10, 15, 20, 30];
+
+const FOV_OPTIONS = [
+  { label: 'Narrow (40\u00B0)', value: 40 },
+  { label: 'Standard (60\u00B0)', value: 60 },
+  { label: 'Wide (75\u00B0)', value: 75 },
+  { label: 'Ultra-wide (90\u00B0)', value: 90 },
+];
 
 function SectionHeader({ title }: { title: string }) {
   const { colors } = useTheme();
@@ -88,9 +102,11 @@ export default function SettingsScreen(): React.JSX.Element {
   const theme = usePreferencesStore(s => s.theme);
   const notificationsEnabled = usePreferencesStore(s => s.notificationsEnabled);
   const minAltitudeDefault = usePreferencesStore(s => s.minAltitudeDefault);
+  const cameraFovDeg = usePreferencesStore(s => s.cameraFovDeg);
   const setTheme = usePreferencesStore(s => s.setTheme);
   const setNotificationsEnabled = usePreferencesStore(s => s.setNotificationsEnabled);
   const setMinAltitudeDefault = usePreferencesStore(s => s.setMinAltitudeDefault);
+  const setCameraFovDeg = usePreferencesStore(s => s.setCameraFovDeg);
 
   const [coreVersion, setCoreVersion] = React.useState('...');
   React.useEffect(() => {
@@ -136,6 +152,16 @@ export default function SettingsScreen(): React.JSX.Element {
         />
       ))}
 
+      <SectionHeader title="CAMERA FOV" />
+      {FOV_OPTIONS.map(opt => (
+        <OptionRow
+          key={opt.value}
+          label={opt.label}
+          selected={cameraFovDeg === opt.value}
+          onPress={() => setCameraFovDeg(opt.value)}
+        />
+      ))}
+
       <SectionHeader title="PURCHASES" />
       <TouchableOpacity
         style={[
@@ -177,46 +203,47 @@ export default function SettingsScreen(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  content: { paddingBottom: 32 },
+  content: { paddingBottom: 28 },
   sectionHeader: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '600',
-    letterSpacing: 1,
-    marginTop: 24,
-    marginBottom: 8,
-    marginHorizontal: 16,
+    letterSpacing: 1.5,
+    marginTop: 20,
+    marginBottom: 6,
+    marginHorizontal: 14,
   },
   optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginHorizontal: 16,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    marginHorizontal: 14,
     marginBottom: 1,
-    borderWidth: 1,
-    borderRadius: 8,
-    marginTop: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 6,
+    marginTop: 3,
   },
-  optionLabel: { fontSize: 16 },
-  checkmark: { fontSize: 18, fontWeight: '700' },
+  optionLabel: { fontSize: 14 },
+  checkmark: { fontSize: 16, fontWeight: '700' },
   toggle: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
+    width: 44,
+    height: 26,
+    borderRadius: 13,
     justifyContent: 'center',
     paddingHorizontal: 2,
   },
-  toggleThumb: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff' },
+  toggleThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' },
   toggleOn: { alignSelf: 'flex-end' },
   toggleOff: { alignSelf: 'flex-start' },
   aboutCard: {
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
+    marginHorizontal: 14,
+    marginTop: 6,
+    padding: 14,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  aboutTitle: { fontSize: 20, fontWeight: '700' },
-  aboutVersion: { fontSize: 14, marginTop: 4 },
-  aboutDescription: { fontSize: 13, marginTop: 12, lineHeight: 19 },
+  aboutTitle: { fontSize: 16, fontWeight: '600' },
+  aboutVersion: { fontSize: 12, marginTop: 3, fontVariant: ['tabular-nums'] },
+  aboutDescription: { fontSize: 12, marginTop: 10, lineHeight: 17, letterSpacing: 0.2 },
 });

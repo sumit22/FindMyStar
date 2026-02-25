@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
+  StyleProp,
+  TextStyle,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,29 +23,32 @@ import type { RootStackParamList } from '../navigation/types';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
+/* ── Instrument-grade type markers ── */
 const TYPE_ICONS: Record<string, string> = {
-  star: '\u2605',
-  planet: '\u25CF',
-  sun: '\u2609',
-  moon: '\u263D',
-  nebula: '\u2601',
-  galaxy: '\u2736',
-  cluster: '\u2022\u2022\u2022',
-  planetary_nebula: '\u25CE',
+  star: '\u2022', // •
+  planet: '\u25CF', // ●
+  sun: '\u2609', // ☉
+  moon: '\u25D0', // ◐
+  nebula: '\u2237', // ∷
+  galaxy: '\u2735', // ✵
+  cluster: '\u2234', // ∴
+  planetary_nebula: '\u25CE', // ◎
 };
 
-function VisibilityBadge({ magnitude }: { magnitude: number }) {
-  const { colors } = useTheme();
-  const visible = magnitude <= 6.0;
-  return (
-    <View
-      style={[styles.badge, { backgroundColor: visible ? colors.success : colors.textSecondary }]}
-      accessibilityLabel={visible ? 'Visible to naked eye' : 'Requires telescope'}>
-      <Text style={styles.badgeText}>{visible ? 'Naked eye' : `Mag ${magnitude.toFixed(1)}`}</Text>
-    </View>
-  );
+/* ── Shared label for small-caps style ── */
+function InstrumentLabel({
+  text,
+  color,
+  style,
+}: {
+  text: string;
+  color: string;
+  style?: StyleProp<TextStyle>;
+}) {
+  return <Text style={[styles.instrumentLabel, { color }, style]}>{text}</Text>;
 }
 
+/* ── Result row ── */
 function ResultItem({
   item,
   onPress,
@@ -55,6 +60,8 @@ function ResultItem({
 }) {
   const { colors } = useTheme();
   const icon = TYPE_ICONS[item.type] ?? '\u2022';
+  const visible = item.magnitude <= 6.0;
+
   return (
     <TouchableOpacity
       style={[
@@ -65,34 +72,39 @@ function ResultItem({
       accessibilityRole="button"
       accessibilityLabel={`${item.commonName ?? item.name}, ${item.type}, magnitude ${item.magnitude.toFixed(1)}${isLocked ? ', Pro required' : ''}`}
       activeOpacity={0.7}>
-      <View style={styles.resultIcon}>
-        <Text style={[styles.iconText, { color: colors.accent }]}>{icon}</Text>
-      </View>
+      {/* Type marker */}
+      <Text style={[styles.typeMarker, { color: colors.accent + '90' }]}>{icon}</Text>
+
+      {/* Name + catalog */}
       <View style={styles.resultContent}>
         <View style={styles.nameRow}>
           <Text style={[styles.resultName, { color: colors.text }]} numberOfLines={1}>
             {item.commonName ?? item.name}
           </Text>
           {isLocked && (
-            <View style={[styles.proBadge, { backgroundColor: colors.primary + '20' }]}>
+            <View style={[styles.proBadge, { backgroundColor: colors.primary + '18' }]}>
               <Text style={[styles.proBadgeText, { color: colors.primary }]}>PRO</Text>
             </View>
           )}
         </View>
-        {item.commonName && (
-          <Text style={[styles.resultCatalog, { color: colors.textSecondary }]} numberOfLines={1}>
-            {item.name}
-          </Text>
-        )}
-        <Text style={[styles.resultType, { color: colors.textSecondary }]}>
+        <Text style={[styles.resultMeta, { color: colors.textSecondary }]} numberOfLines={1}>
+          {item.commonName ? `${item.name}  \u2022  ` : ''}
           {item.type.charAt(0).toUpperCase() + item.type.slice(1).replace('_', ' ')}
         </Text>
       </View>
-      <VisibilityBadge magnitude={item.magnitude} />
+
+      {/* Magnitude */}
+      <View style={styles.magColumn}>
+        <Text style={[styles.magValue, { color: visible ? colors.success : colors.textSecondary }]}>
+          {item.magnitude.toFixed(1)}
+        </Text>
+        <Text style={[styles.magUnit, { color: colors.textSecondary }]}>mag</Text>
+      </View>
     </TouchableOpacity>
   );
 }
 
+/* ── Visible Now hook ── */
 interface VisibleObject {
   obj: CelestialObject;
   altitude: number;
@@ -109,7 +121,6 @@ function useVisibleNow(): { items: VisibleObject[]; loading: boolean } {
     async function load() {
       try {
         const loc = await LocationService.getCurrentLocation();
-        // Get brightest objects (mag ≤ 4.0 covers Sun, Moon, planets, bright stars)
         const all = await CatalogRepo.getAllObjects();
         const bright = all.filter(o => o.magnitude <= 4.0).slice(0, 30);
 
@@ -129,7 +140,6 @@ function useVisibleNow(): { items: VisibleObject[]; loading: boolean } {
         }
 
         if (!cancelled) {
-          // Sort by altitude descending (highest first)
           visible.sort((a, b) => b.altitude - a.altitude);
           setItems(visible.slice(0, 5));
           setLoading(false);
@@ -155,6 +165,7 @@ function azToCardinal(az: number): string {
   return dirs[Math.round((((az % 360) + 360) % 360) / 45) % 8];
 }
 
+/* ── Visible Now section ── */
 function VisibleNowSection({ onSelect }: { onSelect: (id: number) => void }) {
   const { colors } = useTheme();
   const { items, loading } = useVisibleNow();
@@ -162,7 +173,7 @@ function VisibleNowSection({ onSelect }: { onSelect: (id: number) => void }) {
   if (loading) {
     return (
       <View style={styles.visibleSection}>
-        <Text style={[styles.visibleTitle, { color: colors.text }]}>Visible Now</Text>
+        <InstrumentLabel text="VISIBLE NOW" color={colors.textSecondary} />
         <ActivityIndicator size="small" color={colors.primary} style={styles.visibleLoader} />
       </View>
     );
@@ -174,39 +185,40 @@ function VisibleNowSection({ onSelect }: { onSelect: (id: number) => void }) {
 
   return (
     <View style={styles.visibleSection}>
-      <Text style={[styles.visibleTitle, { color: colors.text }]}>Visible Now</Text>
-      {items.map(({ obj, altitude, azimuth }) => {
-        const icon = TYPE_ICONS[obj.type] ?? '\u2022';
-        return (
-          <TouchableOpacity
-            key={obj.id}
-            style={[
-              styles.visibleItem,
-              { backgroundColor: colors.cardBackground, borderColor: colors.border },
-            ]}
-            onPress={() => onSelect(obj.id)}
-            activeOpacity={0.7}>
-            <Text style={[styles.visibleIcon, { color: colors.accent }]}>{icon}</Text>
-            <View style={styles.visibleInfo}>
-              <Text style={[styles.visibleName, { color: colors.text }]} numberOfLines={1}>
-                {obj.commonName ?? obj.name}
-              </Text>
-              <Text style={[styles.visibleDetail, { color: colors.textSecondary }]}>
-                {azToCardinal(azimuth)} {'\u2022'} {altitude.toFixed(0)}
-                {'\u00B0'} above horizon
-              </Text>
-            </View>
-            <Text style={[styles.visibleAlt, { color: colors.success }]}>
-              {altitude.toFixed(0)}
-              {'\u00B0'}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
+      <InstrumentLabel text="VISIBLE NOW" color={colors.textSecondary} />
+      <View style={[styles.visibleList, { borderColor: colors.border }]}>
+        {items.map(({ obj, altitude, azimuth }, idx) => {
+          const icon = TYPE_ICONS[obj.type] ?? '\u2022';
+          return (
+            <React.Fragment key={obj.id}>
+              {idx > 0 && <View style={[styles.hairline, { backgroundColor: colors.border }]} />}
+              <TouchableOpacity
+                style={styles.visibleRow}
+                onPress={() => onSelect(obj.id)}
+                activeOpacity={0.6}>
+                <Text style={[styles.visibleMarker, { color: colors.accent + '80' }]}>{icon}</Text>
+                <View style={styles.visibleInfo}>
+                  <Text style={[styles.visibleName, { color: colors.text }]} numberOfLines={1}>
+                    {obj.commonName ?? obj.name}
+                  </Text>
+                  <Text style={[styles.visibleDir, { color: colors.textSecondary }]}>
+                    {azToCardinal(azimuth)}
+                  </Text>
+                </View>
+                <Text style={[styles.visibleAlt, { color: colors.success }]}>
+                  {altitude.toFixed(0)}
+                  {'\u00B0'}
+                </Text>
+              </TouchableOpacity>
+            </React.Fragment>
+          );
+        })}
+      </View>
     </View>
   );
 }
 
+/* ── Main search screen ── */
 export default function SearchScreen(): React.JSX.Element {
   const { colors } = useTheme();
   const navigation = useNavigation<Nav>();
@@ -220,7 +232,6 @@ export default function SearchScreen(): React.JSX.Element {
   const isPro = useEntitlementStore(s => s.isPro);
 
   useEffect(() => {
-    // Auto-focus on mount
     const timer = setTimeout(() => inputRef.current?.focus(), 300);
     return () => clearTimeout(timer);
   }, []);
@@ -247,14 +258,18 @@ export default function SearchScreen(): React.JSX.Element {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Search bar */}
       <View
-        style={[styles.searchBar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.searchIcon, { color: colors.textSecondary }]}>{'\u{1F50D}'}</Text>
+        style={[
+          styles.searchBar,
+          { backgroundColor: colors.cardBackground, borderColor: colors.border },
+        ]}>
+        <Text style={[styles.searchIcon, { color: colors.textSecondary }]}>{'\u2315'}</Text>
         <TextInput
           ref={inputRef}
           style={[styles.input, { color: colors.text }]}
-          placeholder="Search stars, planets, nebulae..."
-          placeholderTextColor={colors.textSecondary}
+          placeholder="Search objects..."
+          placeholderTextColor={colors.textSecondary + '80'}
           value={searchQuery}
           onChangeText={searchObjects}
           autoCorrect={false}
@@ -271,24 +286,19 @@ export default function SearchScreen(): React.JSX.Element {
         </View>
       )}
 
+      {/* Empty state — no hero, just a subtle prompt */}
       {!error && searchQuery.length === 0 && (
         <>
-          <View style={styles.hintContainer}>
-            <Text style={[styles.emptyIcon, { color: colors.textSecondary }]}>{'\u2605'}</Text>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              Search for celestial objects by name
-            </Text>
-            <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
-              Try "Sirius", "Jupiter", or "M31"
-            </Text>
-          </View>
+          <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
+            Try "Sirius", "Jupiter", or "M31"
+          </Text>
           <VisibleNowSection onSelect={handleSelect} />
         </>
       )}
 
       {!error && searchQuery.length > 0 && !loading && searchResults.length === 0 && (
         <View style={styles.stateContainer}>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+          <Text style={[styles.emptyHint, { color: colors.textSecondary }]}>
             No objects found for "{searchQuery}"
           </Text>
         </View>
@@ -308,67 +318,101 @@ export default function SearchScreen(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  /* ── Search bar ── */
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    margin: 16,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    height: 48,
+    marginHorizontal: 14,
+    marginTop: 10,
+    marginBottom: 6,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    height: 42,
   },
-  searchIcon: { fontSize: 18, marginRight: 8 },
-  input: { flex: 1, fontSize: 16, paddingVertical: 8 },
+  searchIcon: { fontSize: 16, marginRight: 6, opacity: 0.6 },
+  input: { flex: 1, fontSize: 15, paddingVertical: 6 },
+
+  /* ── States ── */
   stateContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
   },
-  emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyText: { fontSize: 16, textAlign: 'center' },
-  emptyHint: { fontSize: 14, textAlign: 'center', marginTop: 8 },
-  errorText: { fontSize: 14, textAlign: 'center' },
-  hintContainer: {
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingTop: 32,
-    paddingBottom: 8,
+  errorText: { fontSize: 13, textAlign: 'center' },
+  emptyHint: {
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 18,
+    marginBottom: 6,
+    letterSpacing: 0.2,
   },
-  visibleSection: { paddingHorizontal: 16, paddingBottom: 8 },
-  visibleLoader: { marginTop: 12 },
-  visibleTitle: { fontSize: 18, fontWeight: '700', marginBottom: 10 },
-  visibleItem: {
+
+  /* ── Instrument label ── */
+  instrumentLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 1.5,
+    marginBottom: 8,
+  },
+
+  /* ── Visible Now ── */
+  visibleSection: { paddingHorizontal: 14, paddingTop: 16, paddingBottom: 6 },
+  visibleLoader: { marginTop: 10 },
+  visibleList: {
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  visibleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 10,
-    marginBottom: 6,
-    borderRadius: 10,
-    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
-  visibleIcon: { fontSize: 20, width: 32, textAlign: 'center' },
-  visibleInfo: { flex: 1, marginLeft: 8 },
-  visibleName: { fontSize: 15, fontWeight: '600' },
-  visibleDetail: { fontSize: 12, marginTop: 2 },
-  visibleAlt: { fontSize: 14, fontWeight: '700' },
-  listContent: { paddingHorizontal: 16, paddingBottom: 24 },
+  hairline: { height: StyleSheet.hairlineWidth },
+  visibleMarker: { fontSize: 14, width: 22, textAlign: 'center' },
+  visibleInfo: { flex: 1, flexDirection: 'row', alignItems: 'baseline', marginLeft: 6 },
+  visibleName: { fontSize: 14, fontWeight: '500', flexShrink: 1 },
+  visibleDir: {
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.8,
+    marginLeft: 8,
+  },
+  visibleAlt: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+    minWidth: 32,
+    textAlign: 'right',
+  },
+
+  /* ── Result items ── */
+  listContent: { paddingHorizontal: 14, paddingBottom: 20, paddingTop: 4 },
   resultItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    marginBottom: 8,
-    borderRadius: 10,
-    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  resultIcon: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  iconText: { fontSize: 22 },
+  typeMarker: { fontSize: 14, width: 22, textAlign: 'center' },
   resultContent: { flex: 1, marginLeft: 8 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  resultName: { fontSize: 16, fontWeight: '600', flexShrink: 1 },
-  proBadge: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 },
-  proBadgeText: { fontSize: 9, fontWeight: '700', letterSpacing: 0.5 },
-  resultCatalog: { fontSize: 12, marginTop: 1 },
-  resultType: { fontSize: 12, marginTop: 2 },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
-  badgeText: { fontSize: 10, color: '#fff', fontWeight: '600' },
+  resultName: { fontSize: 15, fontWeight: '500', flexShrink: 1 },
+  proBadge: { paddingHorizontal: 4, paddingVertical: 1, borderRadius: 3 },
+  proBadgeText: { fontSize: 8, fontWeight: '700', letterSpacing: 0.8 },
+  resultMeta: { fontSize: 11, marginTop: 2, letterSpacing: 0.2 },
+  magColumn: { alignItems: 'flex-end', marginLeft: 8 },
+  magValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  magUnit: { fontSize: 9, letterSpacing: 0.5, marginTop: 1 },
 });

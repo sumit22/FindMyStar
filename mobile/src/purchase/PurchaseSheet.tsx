@@ -51,13 +51,21 @@ export default function PurchaseSheet({
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <View
-          style={[styles.sheet, { backgroundColor: colors.cardBackground }]}
+          style={[
+            styles.sheet,
+            { backgroundColor: colors.cardBackground, borderColor: colors.border },
+          ]}
           onStartShouldSetResponder={() => true}>
-          <Text style={[styles.title, { color: colors.text }]}>Upgrade to Pro</Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Unlock all celestial objects, AR tracking, and alerts.
+          {/* Header */}
+          <Text style={[styles.sheetLabel, { color: colors.textSecondary }]}>UPGRADE</Text>
+          <Text style={[styles.sheetTitle, { color: colors.text }]}>FindMyStar Pro</Text>
+          <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
+            All objects, AR tracking, and alerts.
           </Text>
 
+          <View style={[styles.rule, { backgroundColor: colors.border }]} />
+
+          {/* Products */}
           {PRODUCTS.map(product => {
             const isLoading = loading && selectedSku === product.sku;
             return (
@@ -74,7 +82,7 @@ export default function PurchaseSheet({
                     {product.description}
                   </Text>
                 </View>
-                <View style={[styles.priceButton, { backgroundColor: colors.primary }]}>
+                <View style={[styles.priceBtn, { backgroundColor: colors.primary }]}>
                   {isLoading ? (
                     <ActivityIndicator size="small" color={colors.textInverse} />
                   ) : (
@@ -87,8 +95,9 @@ export default function PurchaseSheet({
             );
           })}
 
+          {/* Restore */}
           <TouchableOpacity
-            style={styles.restoreButton}
+            style={styles.restoreBtn}
             onPress={handleRestore}
             disabled={loading}
             accessibilityRole="button"
@@ -96,12 +105,13 @@ export default function PurchaseSheet({
             {loading && selectedSku === '__restore__' ? (
               <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <Text style={[styles.restoreText, { color: colors.primary }]}>Restore Purchases</Text>
+              <Text style={[styles.restoreText, { color: colors.primary }]}>RESTORE PURCHASES</Text>
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
-            <Text style={[styles.cancelText, { color: colors.textSecondary }]}>Cancel</Text>
+          {/* Cancel */}
+          <TouchableOpacity style={styles.cancelBtn} onPress={onClose}>
+            <Text style={[styles.cancelText, { color: colors.textSecondary }]}>CANCEL</Text>
           </TouchableOpacity>
         </View>
       </Pressable>
@@ -112,39 +122,42 @@ export default function PurchaseSheet({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   sheet: {
-    width: '85%',
-    borderRadius: 16,
-    padding: 24,
-    elevation: 8,
+    width: '78%',
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 18,
   },
-  title: { fontSize: 20, fontWeight: '700', marginBottom: 4 },
-  subtitle: { fontSize: 14, marginBottom: 20, lineHeight: 20 },
+  sheetLabel: { fontSize: 10, fontWeight: '600', letterSpacing: 1.5, marginBottom: 6 },
+  sheetTitle: { fontSize: 18, fontWeight: '300', marginBottom: 4 },
+  sheetSubtitle: { fontSize: 12, lineHeight: 17, marginBottom: 14 },
+  rule: { height: StyleSheet.hairlineWidth, marginBottom: 14 },
   productCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    borderWidth: 1,
-    borderRadius: 10,
-    marginBottom: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 6,
+    marginBottom: 8,
   },
-  productInfo: { flex: 1, marginRight: 12 },
-  productTitle: { fontSize: 16, fontWeight: '600' },
-  productDesc: { fontSize: 12, marginTop: 2 },
-  priceButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    minWidth: 70,
+  productInfo: { flex: 1, marginRight: 10 },
+  productTitle: { fontSize: 14, fontWeight: '500' },
+  productDesc: { fontSize: 11, marginTop: 2, letterSpacing: 0.2 },
+  priceBtn: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    minWidth: 64,
     alignItems: 'center',
   },
-  priceText: { fontSize: 14, fontWeight: '700' },
-  restoreButton: { alignItems: 'center', paddingVertical: 14 },
-  restoreText: { fontSize: 14, fontWeight: '500' },
-  cancelButton: { alignItems: 'center', paddingTop: 4 },
-  cancelText: { fontSize: 15 },
+  priceText: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  restoreBtn: { alignItems: 'center', paddingVertical: 12 },
+  restoreText: { fontSize: 10, fontWeight: '600', letterSpacing: 1.2 },
+  cancelBtn: { alignItems: 'center', paddingTop: 2 },
+  cancelText: { fontSize: 10, fontWeight: '600', letterSpacing: 1.2 },
 });

@@ -19,7 +19,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 function formatTime(ms: number | null): string {
   if (ms === null) {
-    return 'Calculating...';
+    return '--:--';
   }
   const d = new Date(ms);
   const now = new Date();
@@ -69,13 +69,11 @@ function AlarmItem({
           {alarm.objectName}
         </Text>
         <Text style={[styles.alarmTime, { color: colors.textSecondary }]}>
-          {alarm.nextRiseMs
-            ? `Next rise: ${formatTime(alarm.nextRiseMs)}`
-            : 'Calculating next visibility...'}
+          {alarm.nextRiseMs ? formatTime(alarm.nextRiseMs) : 'Calculating...'}
         </Text>
         <Text style={[styles.alarmMeta, { color: colors.textSecondary }]}>
-          Min alt: {alarm.minAltitude}
-          {'\u00B0'} {'\u2022'} {alarm.notifyBeforeMinutes}min before
+          {alarm.minAltitude}
+          {'\u00B0'} min alt {'\u2022'} {alarm.notifyBeforeMinutes} min before
           {alarm.isRecurring ? ' \u2022 Recurring' : ''}
         </Text>
       </View>
@@ -147,8 +145,7 @@ export default function AlarmsScreen(): React.JSX.Element {
   if (trackedObjects.length === 0 && !loading) {
     return (
       <View style={[styles.emptyContainer, { backgroundColor: colors.background }]}>
-        <Text style={[styles.emptyIcon, { color: colors.textSecondary }]}>{'\u{1F514}'}</Text>
-        <Text style={[styles.emptyTitle, { color: colors.text }]}>No alarms set</Text>
+        <Text style={[styles.emptyLabel, { color: colors.textSecondary }]}>NO ALARMS SET</Text>
         <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
           Search for an object and tap "Set Alert" to get notified when it becomes visible.
         </Text>
@@ -157,9 +154,7 @@ export default function AlarmsScreen(): React.JSX.Element {
           onPress={() => navigation.navigate('MainTabs')}
           accessibilityRole="button"
           accessibilityLabel="Go to search">
-          <Text style={[styles.searchButtonText, { color: colors.textInverse }]}>
-            Search Objects
-          </Text>
+          <Text style={[styles.searchButtonText, { color: colors.textInverse }]}>SEARCH</Text>
         </TouchableOpacity>
       </View>
     );
@@ -187,35 +182,53 @@ export default function AlarmsScreen(): React.JSX.Element {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  listContent: { padding: 16, paddingBottom: 24 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  emptyIcon: { fontSize: 48, marginBottom: 16 },
-  emptyTitle: { fontSize: 20, fontWeight: '600', marginBottom: 8 },
-  emptySubtitle: { fontSize: 14, textAlign: 'center', marginBottom: 24, lineHeight: 20 },
-  searchButton: { paddingHorizontal: 24, paddingVertical: 12, borderRadius: 10 },
-  searchButtonText: { fontSize: 16, fontWeight: '600' },
+  listContent: { padding: 14, paddingBottom: 20 },
+
+  /* ── Empty state ── */
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 28 },
+  emptyLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    letterSpacing: 1.5,
+    marginBottom: 10,
+  },
+  emptySubtitle: { fontSize: 13, textAlign: 'center', marginBottom: 20, lineHeight: 18 },
+  searchButton: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 6 },
+  searchButtonText: { fontSize: 13, fontWeight: '600', letterSpacing: 0.8 },
+
+  /* ── Alarm item ── */
   alarmItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    marginBottom: 10,
-    borderRadius: 10,
-    borderWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 4,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  alarmDisabled: { opacity: 0.5 },
+  alarmDisabled: { opacity: 0.45 },
   alarmContent: { flex: 1 },
-  alarmName: { fontSize: 16, fontWeight: '600' },
-  alarmTime: { fontSize: 14, marginTop: 4 },
-  alarmMeta: { fontSize: 12, marginTop: 2 },
+  alarmName: { fontSize: 14, fontWeight: '500' },
+  alarmTime: {
+    fontSize: 13,
+    marginTop: 3,
+    fontVariant: ['tabular-nums'],
+  },
+  alarmMeta: {
+    fontSize: 10,
+    marginTop: 2,
+    letterSpacing: 0.3,
+    fontVariant: ['tabular-nums'],
+  },
   toggleBtn: {
-    width: 48,
-    height: 28,
-    borderRadius: 14,
+    width: 44,
+    height: 26,
+    borderRadius: 13,
     justifyContent: 'center',
     paddingHorizontal: 2,
-    marginLeft: 12,
+    marginLeft: 10,
   },
-  toggleThumb: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#fff' },
+  toggleThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff' },
   toggleOn: { alignSelf: 'flex-end' },
   toggleOff: { alignSelf: 'flex-start' },
 });
