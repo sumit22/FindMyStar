@@ -8,8 +8,12 @@ import { PurchaseProvider } from './purchase/PurchaseProvider';
 import { usePreferencesStore } from './store/preferencesStore';
 import * as BackgroundTask from './services/BackgroundTask';
 import * as LocationService from './services/LocationService';
+import * as GlobalErrorHandler from './services/GlobalErrorHandler';
+import ErrorBoundary from './components/ErrorBoundary';
 import RootNavigator from './navigation/RootNavigator';
 import type { RootStackParamList } from './navigation/types';
+
+GlobalErrorHandler.install();
 
 /**
  * Parse a deep link or notification payload to extract an objectId.
@@ -57,18 +61,26 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     loadPreferences();
-    LocationService.requestPermission();
-    BackgroundTask.initialize();
+    LocationService.requestPermission().catch(e =>
+      console.warn('[App] Location permission request failed:', e),
+    );
+    try {
+      BackgroundTask.initialize();
+    } catch (e) {
+      console.warn('[App] BackgroundTask initialization failed:', e);
+    }
     return () => BackgroundTask.teardown();
   }, [loadPreferences]);
 
   return (
-    <SafeAreaProvider>
-      <ThemeProvider>
-        <PurchaseProvider>
-          <AppContent />
-        </PurchaseProvider>
-      </ThemeProvider>
-    </SafeAreaProvider>
+    <ErrorBoundary>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <PurchaseProvider>
+            <AppContent />
+          </PurchaseProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }
