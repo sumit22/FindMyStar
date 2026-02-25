@@ -4,11 +4,12 @@
  * Android: Uses react-native-background-fetch (wraps WorkManager).
  * iOS: Uses react-native-background-fetch (wraps BGTaskScheduler).
  *
- * This module provides a platform-agnostic interface. The actual background
- * task registration requires react-native-background-fetch to be installed.
+ * Foreground fallback: AppState listener recalculates when app is foregrounded,
+ * covering cases where the OS killed the background task.
  */
 
 import { AppState, AppStateStatus } from 'react-native';
+import BackgroundFetch from 'react-native-background-fetch';
 import * as AlarmScheduler from './AlarmScheduler';
 
 let lastRecalcDate = '';
@@ -35,8 +36,8 @@ async function recalculateIfNeeded(): Promise<void> {
   try {
     await AlarmScheduler.recalculateAll();
     lastRecalcDate = today;
-  } catch {
-    // Will retry on next trigger
+  } catch (e) {
+    console.warn('[BackgroundTask] recalculation failed:', e);
   }
 }
 
@@ -54,36 +55,34 @@ function handleAppStateChange(nextState: AppStateStatus): void {
  * Initialize the background task system.
  * Call once at app startup.
  *
- * For full background scheduling, install react-native-background-fetch and
- * register the task in native code. This function sets up the JS-side handler
- * and foreground fallback.
+ * Registers a periodic background fetch (every ~15 minutes) that recalculates
+ * alarm rise/set times once per day. Also sets up a foreground fallback via
+ * AppState listener.
  */
 export function initialize(): void {
   // Listen for app foregrounding as a fallback recalculation trigger.
-  // This handles cases where the background task didn't fire (device was off,
-  // task was killed by OS, timezone changed, etc.)
   appStateListener = AppState.addEventListener('change', handleAppStateChange);
+
+  // Register background fetch with the OS
+  BackgroundFetch.configure(
+    {
+      minimumFetchInterval: 15, // minutes (OS may throttle further)
+      stopOnTerminate: false,
+      startOnBoot: true,
+      enableHeadless: true,
+    },
+    async (taskId: string) => {
+      await recalculateIfNeeded();
+      BackgroundFetch.finish(taskId);
+    },
+    (taskId: string) => {
+      // OS demanded we stop — signal completion immediately
+      BackgroundFetch.finish(taskId);
+    },
+  );
 
   // Run an initial check
   recalculateIfNeeded();
-}
-
-/**
- * Background fetch handler - called by the OS background task system.
- * Register this with react-native-background-fetch:
- *
- *   BackgroundFetch.configure({ minimumFetchInterval: 15 }, onBackgroundFetch, onTimeout);
- */
-export async function onBackgroundFetch(_taskId: string): Promise<void> {
-  await recalculateIfNeeded();
-  // Caller should signal completion to the background fetch library
-}
-
-/**
- * Background fetch timeout handler.
- */
-export function onBackgroundTimeout(_taskId: string): void {
-  // OS demanded we stop - nothing to clean up since recalculateAll is async
 }
 
 /**

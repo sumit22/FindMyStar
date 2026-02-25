@@ -70,8 +70,8 @@ async function updateLocation(): Promise<void> {
     const loc = await LocationService.getCurrentLocation();
     cachedLat = loc.lat;
     cachedLon = loc.lon;
-  } catch {
-    // Keep using cached location
+  } catch (e) {
+    console.warn('[ObjectTracker] location update failed, using cached:', e);
   }
 }
 
@@ -168,8 +168,8 @@ async function trackingLoop(): Promise<void> {
     for (const cb of listeners) {
       cb(frame);
     }
-  } catch {
-    // Skip frame on error, retry next frame
+  } catch (e) {
+    console.warn('[ObjectTracker] tracking frame error:', e);
   }
 
   if (active) {
@@ -232,6 +232,7 @@ export function stop(): void {
   targetRaDec = null;
   isLocked = false;
   belowThresholdSince = 0;
+  listeners = [];
 }
 
 /**

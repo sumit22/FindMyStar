@@ -61,12 +61,17 @@ export function getCurrentLocation(): Promise<Location> {
           },
           err => {
             if (lastKnown) {
+              console.warn(
+                '[LocationService] Using cached location (age: ' +
+                  Math.round((Date.now() - lastKnown.timestamp) / 1000) +
+                  's)',
+              );
               resolve(lastKnown);
             } else {
               reject(new Error(`Location unavailable: ${err.message}`));
             }
           },
-          { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 },
+          { enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 },
         );
       },
       { enableHighAccuracy: true, timeout: 5000, maximumAge: 60000 },

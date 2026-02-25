@@ -160,8 +160,8 @@ export async function recalculateAll(): Promise<void> {
           );
         }
       }
-    } catch {
-      // Skip failed alarms, retry at next recalculation cycle
+    } catch (e) {
+      console.warn(`[AlarmScheduler] recalculation failed for alarm ${alarm.id}:`, e);
     }
   }
 }

@@ -48,6 +48,8 @@ interface TrackingState {
   stopTracking: () => void;
 }
 
+let unsubscribeTracking: (() => void) | null = null;
+
 export const useTrackingStore = create<TrackingState>((set, get) => ({
   trackedObjects: [],
   activeTrackingId: null,
@@ -135,11 +137,17 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
   startTracking: async obj => {
     set({ error: null });
     try {
+      // Clean up any previous listener before starting a new session
+      if (unsubscribeTracking) {
+        unsubscribeTracking();
+        unsubscribeTracking = null;
+      }
+
       await ObjectTracker.initialize(obj);
       set({ activeTrackingId: obj.id });
 
-      // Subscribe to tracking updates
-      ObjectTracker.onTrackingUpdate(frame => {
+      // Subscribe to tracking updates and capture unsubscribe handle
+      unsubscribeTracking = ObjectTracker.onTrackingUpdate(frame => {
         set({
           ar: {
             altitude: frame.altitude,
@@ -157,6 +165,10 @@ export const useTrackingStore = create<TrackingState>((set, get) => ({
   },
 
   stopTracking: () => {
+    if (unsubscribeTracking) {
+      unsubscribeTracking();
+      unsubscribeTracking = null;
+    }
     ObjectTracker.stop();
     set({ activeTrackingId: null, ar: null });
   },

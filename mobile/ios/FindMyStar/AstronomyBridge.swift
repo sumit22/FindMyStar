@@ -50,6 +50,10 @@ class AstronomyBridge: NSObject {
   @objc func computeTrackingRaDec(_ ra: Double, dec: Double, lat: Double, lon: Double, unixMs: Double,
                                    resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
     let result = ffi_compute_tracking_radec(ra, dec, lat, lon, unixMs)
+    if result.error_code != 0 {
+      reject("CORE_ERROR", "compute_tracking_radec failed with code \(result.error_code)", nil)
+      return
+    }
     resolve([
       "altitude": result.altitude,
       "azimuth": result.azimuth,
@@ -63,6 +67,10 @@ class AstronomyBridge: NSObject {
   @objc func computeRiseSet(_ objectType: Int, objectId: Int, lat: Double, lon: Double, startMs: Double,
                              resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
     let result = ffi_compute_rise_set_object(Int32(objectType), UInt32(objectId), lat, lon, startMs)
+    if result.status < 0 {
+      reject("CORE_ERROR", "compute_rise_set_object failed with status \(result.status)", nil)
+      return
+    }
     resolve(["status": result.status, "riseMs": result.rise_ms, "setMs": result.set_ms])
   }
 
@@ -70,6 +78,10 @@ class AstronomyBridge: NSObject {
   @objc func computeRiseSetRaDec(_ ra: Double, dec: Double, lat: Double, lon: Double, startMs: Double,
                                   resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
     let result = ffi_compute_rise_set(ra, dec, lat, lon, startMs)
+    if result.status < 0 {
+      reject("CORE_ERROR", "compute_rise_set failed with status \(result.status)", nil)
+      return
+    }
     resolve(["status": result.status, "riseMs": result.rise_ms, "setMs": result.set_ms])
   }
 
@@ -92,13 +104,23 @@ class AstronomyBridge: NSObject {
 
   @objc func createEntitlement(_ planType: Int, validUntilMs: Double, deviceId: String,
                                 resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-    guard let deviceData = deviceId.data(using: .utf8) else {
+    guard planType >= 0 && planType <= 255 else {
+      reject("CORE_ERROR", "Invalid plan type: \(planType)", nil)
+      return
+    }
+    guard validUntilMs >= 0 && !validUntilMs.isNaN && !validUntilMs.isInfinite else {
+      reject("CORE_ERROR", "Invalid validUntilMs: \(validUntilMs)", nil)
+      return
+    }
+    guard let deviceData = deviceId.data(using: .utf8), !deviceData.isEmpty else {
       reject("CORE_ERROR", "Invalid device ID encoding", nil)
       return
     }
     var outBuf = [UInt8](repeating: 0, count: 57)
     let result = deviceData.withUnsafeBytes { devicePtr -> Int32 in
-      let baseAddr = devicePtr.baseAddress!.assumingMemoryBound(to: UInt8.self)
+      guard let baseAddr = devicePtr.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+        return -3
+      }
       return ffi_create_entitlement(UInt8(planType), UInt64(validUntilMs), baseAddr, Int32(deviceData.count), &outBuf, 57)
     }
     if result == 0 {
@@ -110,18 +132,26 @@ class AstronomyBridge: NSObject {
 
   @objc func checkEntitlement(_ payloadBase64: String, deviceId: String, nowMs: Double,
                                resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-    guard let payloadData = Data(base64Encoded: payloadBase64) else {
+    guard nowMs >= 0 && !nowMs.isNaN && !nowMs.isInfinite else {
+      reject("CORE_ERROR", "Invalid timestamp: \(nowMs)", nil)
+      return
+    }
+    guard let payloadData = Data(base64Encoded: payloadBase64), !payloadData.isEmpty else {
       reject("CORE_ERROR", "Invalid base64 payload", nil)
       return
     }
-    guard let deviceData = deviceId.data(using: .utf8) else {
+    guard let deviceData = deviceId.data(using: .utf8), !deviceData.isEmpty else {
       reject("CORE_ERROR", "Invalid device ID encoding", nil)
       return
     }
     let result = payloadData.withUnsafeBytes { payloadPtr -> Int32 in
-      let pBase = payloadPtr.baseAddress!.assumingMemoryBound(to: UInt8.self)
+      guard let pBase = payloadPtr.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+        return -2
+      }
       return deviceData.withUnsafeBytes { devicePtr -> Int32 in
-        let dBase = devicePtr.baseAddress!.assumingMemoryBound(to: UInt8.self)
+        guard let dBase = devicePtr.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+          return -2
+        }
         return ffi_check_entitlement(pBase, Int32(payloadData.count), dBase, Int32(deviceData.count), UInt64(nowMs))
       }
     }
@@ -129,7 +159,10 @@ class AstronomyBridge: NSObject {
   }
 
   @objc func coreVersion(_ resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
-    let ptr = ffi_core_version()
-    resolve(String(cString: ptr!))
+    guard let ptr = ffi_core_version() else {
+      reject("CORE_ERROR", "Failed to get core version", nil)
+      return
+    }
+    resolve(String(cString: ptr))
   }
 }

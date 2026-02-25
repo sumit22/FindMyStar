@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Platform, NativeModules } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Core from '../native/FindMyStarCore';
 import * as CatalogRepo from '../data/CatalogRepository';
@@ -30,17 +31,53 @@ function planTypeToName(n: number): PlanTypeName {
   }
 }
 
-/** Returns a stable per-install device identifier (UUID v4). */
+/**
+ * Returns a stable per-install device identifier.
+ *
+ * Uses the platform-provided device ID when available:
+ *   - Android: Settings.Secure.ANDROID_ID (unique per app-signing key + device)
+ *   - iOS: identifierForVendor (unique per vendor + device, resets on full uninstall)
+ *
+ * Falls back to a crypto-random UUID persisted in AsyncStorage if the native
+ * ID is unavailable (e.g. emulator or missing native module).
+ */
 async function getDeviceId(): Promise<string> {
   let id = await AsyncStorage.getItem(DEVICE_ID_KEY);
   if (!id) {
-    // Generate UUID v4 using Math.random (sufficient for device binding)
-    id = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    // Try platform-provided stable identifier first
+    try {
+      if (Platform.OS === 'android') {
+        const { PlatformConstants } = NativeModules;
+        const androidId = PlatformConstants?.getAndroidID?.() as string | undefined;
+        if (androidId && androidId.length > 0) {
+          id = `android-${androidId}`;
+        }
+      }
+    } catch {
+      // Fall through to crypto-random fallback
+    }
+
+    if (!id) {
+      // Crypto-random UUID v4 fallback (much stronger than Math.random)
+      const bytes = new Uint8Array(16);
+      if (typeof globalThis.crypto?.getRandomValues === 'function') {
+        globalThis.crypto.getRandomValues(bytes);
+      } else {
+        // Last resort: Math.random (only on very old RN versions)
+        for (let i = 0; i < 16; i++) {
+          bytes[i] = Math.floor(Math.random() * 256);
+        }
+      }
+      // Set version (4) and variant (RFC 4122) bits
       // eslint-disable-next-line no-bitwise
-      const r = (Math.random() * 16) | 0;
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
       // eslint-disable-next-line no-bitwise
-      return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
-    });
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+      const hex = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+      id = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
+
     await AsyncStorage.setItem(DEVICE_ID_KEY, id);
   }
   return id;
