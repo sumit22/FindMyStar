@@ -42,6 +42,23 @@ npm install
 npm start
 ```
 
+### Entitlement Signing Key (optional, for release builds)
+
+The Rust core verifies HMAC-signed entitlement blobs (see [`core/src/entitlement.rs`](../core/src/entitlement.rs)). The 32-byte signing key is injected at build time by [`core/build.rs`](../core/build.rs) from one of:
+
+1. **`FINDMYSTAR_ENTITLEMENT_KEY`** environment variable (64 hex chars). Used by CI — store as a GitHub Actions secret.
+2. **`core/entitlement_key.local`** file (64 hex chars on the first line, gitignored). Used for local dev/release builds — write the key once and forget it.
+3. **All-zero fallback** if neither is configured. Dev builds, tests, and unit verification all work; only blobs signed with a *different* key fail to verify.
+
+To generate a new key:
+
+```bash
+# 32 random bytes as hex
+openssl rand -hex 32 > core/entitlement_key.local
+```
+
+For CI release builds, add the same hex string as the `FINDMYSTAR_ENTITLEMENT_KEY` repository secret. Keys are rotated by replacing the file/secret and rebuilding; do not commit either anywhere.
+
 ---
 
 ## Architecture Overview

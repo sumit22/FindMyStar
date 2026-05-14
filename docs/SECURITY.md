@@ -1,5 +1,7 @@
 # Security & Threat Model
 
+> **Dual-use note.** FindMyStar's sensor-fusion and target-lock pipeline could plausibly be adapted to point-and-aim contexts well beyond celestial observation. See [../RESPONSIBLE_USE.md](../RESPONSIBLE_USE.md) for the maintainer's statement on uses the project is not designed for (aircraft lasing, weapons targeting, safety-critical navigation, surveillance) and how to report misuse.
+
 ## 1. Security Principles
 
 ### 1.1 Privacy by Design

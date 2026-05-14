@@ -8,54 +8,17 @@
 ///
 /// The HMAC prevents trivial SQLite tampering. The Rust engine always verifies
 /// the signature and checks expiration before granting pro access.
+///
+/// The 32-byte signing key is injected at build time by `build.rs` from either
+/// the `FINDMYSTAR_ENTITLEMENT_KEY` env var or `core/entitlement_key.local`
+/// (gitignored). Builds with no key configured fall back to all-zero bytes —
+/// fine for dev, but won't verify against production-signed entitlements.
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
 
 type HmacSha256 = Hmac<Sha256>;
 
-// Key material is split across functions and XOR-mixed at runtime to resist
-// static extraction from the binary. Not foolproof against a determined
-// reverse engineer, but raises the bar significantly above a plain constant.
-// LTO + symbol stripping (already in release profile) further help.
-
-#[inline(never)]
-fn coord_table_a() -> [u8; 16] {
-    [
-        0x4f, 0x6d, 0x23, 0xa1, 0xb7, 0x58, 0xe9, 0x3c, 0xd4, 0x1f, 0x82, 0x6b, 0x90, 0xf5, 0x47,
-        0xc3,
-    ]
-}
-
-#[inline(never)]
-fn coord_table_b() -> [u8; 16] {
-    [
-        0x2e, 0x71, 0xa8, 0x0d, 0x5b, 0xe6, 0x39, 0x14, 0xfc, 0x87, 0x4a, 0xd0, 0x65, 0xb2, 0x1c,
-        0x93,
-    ]
-}
-
-#[inline(never)]
-fn derive_seal() -> [u8; 32] {
-    let a = coord_table_a();
-    let b = coord_table_b();
-    let mut out = [0u8; 32];
-    out[..16].copy_from_slice(&a);
-    out[16..].copy_from_slice(&b);
-    // Mix: XOR each byte with its index to avoid the raw halves appearing in .rodata
-    for (i, byte) in out.iter_mut().enumerate() {
-        *byte ^= i as u8;
-    }
-    out
-}
-
-// Inverse of derive_seal: undo the index XOR to recover the actual key.
-fn signing_material() -> [u8; 32] {
-    let mut k = derive_seal();
-    for (i, byte) in k.iter_mut().enumerate() {
-        *byte ^= i as u8;
-    }
-    k
-}
+include!(concat!(env!("OUT_DIR"), "/entitlement_key.rs"));
 
 /// Total serialized size of an entitlement payload.
 pub const ENTITLEMENT_SIZE: usize = 57; // 1 + 8 + 16 + 32
@@ -132,8 +95,7 @@ pub fn create_entitlement(
     buf[DEVICE_HASH_OFFSET..DEVICE_HASH_OFFSET + DEVICE_HASH_SIZE].copy_from_slice(device_hash);
 
     // Compute HMAC-SHA256 over the 25-byte payload
-    let mut mac =
-        HmacSha256::new_from_slice(&signing_material()).expect("key length is always valid");
+    let mut mac = HmacSha256::new_from_slice(&SIGNING_KEY).expect("key length is always valid");
     mac.update(&buf[..PAYLOAD_SIZE]);
     let signature = mac.finalize().into_bytes();
     buf[PAYLOAD_SIZE..].copy_from_slice(&signature);
@@ -155,8 +117,7 @@ pub fn verify_and_decode(
     }
 
     // Verify HMAC first (constant-time comparison inside hmac crate)
-    let mut mac =
-        HmacSha256::new_from_slice(&signing_material()).expect("key length is always valid");
+    let mut mac = HmacSha256::new_from_slice(&SIGNING_KEY).expect("key length is always valid");
     mac.update(&buf[..PAYLOAD_SIZE]);
     mac.verify_slice(&buf[PAYLOAD_SIZE..]).ok()?;
 

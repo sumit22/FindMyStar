@@ -113,6 +113,7 @@ jobs:
         run: cargo build --target aarch64-linux-android --release
         env:
           CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER: ${{ steps.setup-ndk.outputs.ndk-path }}/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang
+          FINDMYSTAR_ENTITLEMENT_KEY: ${{ secrets.FINDMYSTAR_ENTITLEMENT_KEY }}
 
       - name: Copy native library to jniLibs
         run: |
@@ -177,6 +178,8 @@ jobs:
       - name: Build Rust core for iOS (arm64)
         working-directory: core
         run: cargo build --target aarch64-apple-ios --release
+        env:
+          FINDMYSTAR_ENTITLEMENT_KEY: ${{ secrets.FINDMYSTAR_ENTITLEMENT_KEY }}
 
       - name: Build catalog database
         run: |

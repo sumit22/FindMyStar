@@ -49,6 +49,9 @@ emulator-screenshot.png
 .env.local
 .env.production
 
+# Entitlement signing key (injected at build time)
+/core/entitlement_key.local
+
 # Database (built artifact, not source)
 /db/findmystar.db
 /mobile/assets/findmystar.db
