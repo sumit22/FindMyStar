@@ -28,7 +28,7 @@ npm --version  # v9+
 ### Project Setup
 
 ```bash
-git clone https://github.com/yourusername/FindMyStar.git
+git clone https://github.com/sumit22/FindMyStar.git
 cd FindMyStar
 
 # Core engine (Rust)
